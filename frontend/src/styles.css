@@ -624,9 +624,67 @@ pre {
   color: #52637a;
 }
 
+.voice-summary {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid #dbe5f0;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.voice-summary span {
+  color: #64748b;
+  font-size: 14px;
+}
+
 .voice-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+.voice-diagnostics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.voice-diagnostics article {
+  min-height: 92px;
+  padding: 12px;
+  border: 1px solid #dbe5f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.voice-diagnostics strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #173b72;
+  font-size: 14px;
+}
+
+.voice-diagnostics span {
+  color: #52637a;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.volume-meter {
+  height: 8px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef7;
+}
+
+.volume-meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #00856f;
+  transition: width 0.18s ease;
 }
 
 .command-grid {

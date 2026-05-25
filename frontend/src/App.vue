@@ -114,7 +114,7 @@ const providerHint = computed(() => providerDefaults[config.provider].hint)
 const modelPlaceholder = computed(() => providerDefaults[config.provider].model)
 const baseUrlPlaceholder = computed(() => providerDefaults[config.provider].base_url || '无需填写')
 
-const { listening, supported, transcript, start } = useVoiceCommands({
+const { listening, supported, transcript, voiceStatus, start, testMicrophone, stopMicrophoneTest } = useVoiceCommands({
   outline: generateOutline,
   quiz: generateQuizForSelected,
   wrong: loadWrongs,
@@ -390,11 +390,35 @@ function applyProviderDefaults() {
           <MessageCircle :size="20" />
           <h2>语音助手</h2>
         </div>
-        <p>{{ transcript }}</p>
+        <div class="voice-summary">
+          <p>{{ transcript }}</p>
+          <span>{{ voiceStatus.diagnostic }}</span>
+        </div>
         <div class="voice-actions">
           <button class="primary" :class="{ active: listening }" :disabled="!supported" @click="start">
-            <Mic :size="17" /> {{ listening ? '停止语音识别' : '开始语音识别' }}
+            <Mic :size="17" /> {{ listening ? '停止并处理语音' : '开始语音识别' }}
           </button>
+          <button @click="testMicrophone">麦克风测试</button>
+          <button @click="stopMicrophoneTest">停止测试</button>
+        </div>
+        <div class="voice-diagnostics">
+          <article>
+            <strong>麦克风权限</strong>
+            <span>{{ voiceStatus.permission }}</span>
+          </article>
+          <article>
+            <strong>输入音量</strong>
+            <span>{{ voiceStatus.volumeText }} · {{ voiceStatus.volume }}%</span>
+            <div class="volume-meter"><i :style="{ width: `${voiceStatus.volume}%` }"></i></div>
+          </article>
+          <article>
+            <strong>识别文本</strong>
+            <span>{{ voiceStatus.lastText || '暂无' }}</span>
+          </article>
+          <article>
+            <strong>命令命中</strong>
+            <span>{{ voiceStatus.matchedCommand || '暂无' }}</span>
+          </article>
         </div>
         <div class="command-grid">
           <span>生成大纲</span>
