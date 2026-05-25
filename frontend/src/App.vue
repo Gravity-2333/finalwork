@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   Bot,
   BrainCircuit,
@@ -59,7 +59,39 @@ const face = reactive({
   cameraReady: 'mediaDevices' in navigator
 })
 
+const providerDefaults = {
+  mock: {
+    model: 'mock-assistant',
+    base_url: '本地演示，无需地址',
+    hint: 'Mock Provider 可离线演示完整学习流程。'
+  },
+  local_ollama: {
+    model: 'qwen2.5:7b',
+    base_url: 'http://localhost:11434',
+    hint: '本地 Ollama 默认连接 http://localhost:11434，无需 API Key。'
+  },
+  cloud_ollama: {
+    model: 'qwen2.5:7b',
+    base_url: 'https://your-ollama.example.com/v1',
+    hint: '云端 Ollama 使用 OpenAI-compatible 接口，API Key 从 OLLAMA_API_KEY 读取。'
+  },
+  deepseek: {
+    model: 'deepseek-chat',
+    base_url: 'https://api.deepseek.com/v1',
+    hint: 'DeepSeek API Key 从 DEEPSEEK_API_KEY 读取。'
+  }
+}
+
 const selectedChapter = computed(() => chapters.value.find((item) => item.id === selectedChapterId.value))
+const uniqueDocuments = computed(() => {
+  const seen = new Set()
+  return documents.value.filter((item) => {
+    if (seen.has(item.filename)) return false
+    seen.add(item.filename)
+    return true
+  })
+})
+const visibleWrongs = computed(() => wrongs.value.slice(0, 3))
 const progress = computed(() => {
   if (!chapters.value.length) return 0
   return Math.round(chapters.value.reduce((sum, item) => sum + item.progress, 0) / chapters.value.length)
@@ -68,9 +100,10 @@ const progress = computed(() => {
 const providerHint = computed(() => {
   if (config.provider === 'deepseek' && !env.deepseek_key_ready) return '未检测到 DEEPSEEK_API_KEY，调用时会自动使用 Mock fallback。'
   if (config.provider === 'cloud_ollama' && !env.ollama_key_ready) return '未检测到 OLLAMA_API_KEY，云端 Ollama 将友好降级。'
-  if (config.provider === 'local_ollama') return '本地 Ollama 默认连接 http://localhost:11434，无需 API Key。'
-  return 'Mock Provider 可离线演示完整学习流程。'
+  return providerDefaults[config.provider].hint
 })
+const modelPlaceholder = computed(() => providerDefaults[config.provider].model)
+const baseUrlPlaceholder = computed(() => providerDefaults[config.provider].base_url)
 
 const { listening, supported, transcript, start } = useVoiceCommands({
   seed: loadSample,
@@ -84,6 +117,7 @@ const { listening, supported, transcript, start } = useVoiceCommands({
 })
 
 onMounted(async () => {
+  applyProviderDefaults()
   await refreshHealth()
   await refreshDocuments()
   await loadWrongs()
@@ -92,6 +126,11 @@ onMounted(async () => {
     await demoFlow()
   }
 })
+
+watch(
+  () => config.provider,
+  () => applyProviderDefaults()
+)
 
 async function runTask(message, task) {
   status.loading = true
@@ -141,7 +180,7 @@ async function handleUpload(event) {
 async function loadSample() {
   const data = await runTask('正在载入示例课程资料...', seedDocument)
   if (data) {
-    status.message = `示例资料已进入知识库，共 ${data.document.chunk_count} 个片段。`
+    status.message = `示例资料已就绪，共 ${data.document.chunk_count} 个片段。`
     await refreshDocuments()
   }
 }
@@ -200,15 +239,27 @@ async function demoFlow() {
   if (selectedChapter.value) await generateContent(selectedChapter.value)
   await generateQuizForSelected()
 }
+
+function applyProviderDefaults() {
+  const defaults = providerDefaults[config.provider]
+  const knownModels = Object.values(providerDefaults).map((item) => item.model)
+  const knownBaseUrls = Object.values(providerDefaults).map((item) => item.base_url)
+  if (!config.model || knownModels.includes(config.model)) {
+    config.model = defaults.model
+  }
+  if (!config.base_url || knownBaseUrls.includes(config.base_url)) {
+    config.base_url = defaults.base_url
+  }
+}
 </script>
 
 <template>
   <main class="app-shell">
     <section class="hero">
-      <div>
-        <div class="eyebrow"><BrainCircuit :size="18" /> LangChain + LangGraph + LangSmith</div>
+      <div class="hero-copy">
+        <div class="eyebrow"><BrainCircuit :size="17" /> LangChain · LangGraph · 可选 LangSmith</div>
         <h1>AI 学习助手</h1>
-        <p>上传课程资料，构建专属知识库，自动生成学习大纲、章节内容、在线测验与错题复盘。</p>
+        <p>把课程资料转成可学习、可测验、可复盘的个人知识库。</p>
       </div>
       <div class="hero-actions">
         <button class="primary" :disabled="status.loading" @click="verifyFace">
@@ -220,42 +271,45 @@ async function demoFlow() {
       </div>
     </section>
 
-    <section class="status-bar">
-      <span :class="['face-pill', face.ok ? 'pass' : '']">
-        <CheckCircle2 :size="17" /> {{ face.message }}
-      </span>
-      <span><Bot :size="17" /> {{ status.message }}</span>
-      <span v-if="status.warning" class="warning"><ShieldAlert :size="17" /> {{ status.warning }}</span>
-    </section>
-
     <section class="provider-panel">
-      <label>
-        模型来源
-        <select v-model="config.provider">
-          <option value="mock">mock</option>
-          <option value="local_ollama">local_ollama</option>
-          <option value="cloud_ollama">cloud_ollama</option>
-          <option value="deepseek">deepseek</option>
-        </select>
-      </label>
-      <label>
-        模型名称
-        <input v-model="config.model" placeholder="deepseek-chat / qwen2.5:7b" />
-      </label>
-      <label>
-        base_url
-        <input v-model="config.base_url" placeholder="http://localhost:11434" />
-      </label>
-      <label class="toggle">
-        <input v-model="config.langsmith_enabled" type="checkbox" />
-        LangSmith 追踪
-      </label>
-      <p>{{ providerHint }}</p>
+      <div class="runtime-state">
+        <span :class="['state-dot', face.ok ? 'ok' : '']"></span>
+        <strong>{{ face.ok ? '已登录' : '待核验' }}</strong>
+        <small>{{ status.message }}</small>
+      </div>
+      <div class="provider-fields">
+        <label>
+          <span>模型来源</span>
+          <select v-model="config.provider">
+            <option value="mock">Mock</option>
+            <option value="local_ollama">本地 Ollama</option>
+            <option value="cloud_ollama">云端 Ollama</option>
+            <option value="deepseek">DeepSeek</option>
+          </select>
+        </label>
+        <label>
+          <span>模型</span>
+          <input v-model="config.model" :placeholder="modelPlaceholder" />
+        </label>
+        <label>
+          <span>地址</span>
+          <input v-model="config.base_url" :placeholder="baseUrlPlaceholder" />
+        </label>
+        <label class="toggle">
+          <input v-model="config.langsmith_enabled" type="checkbox" />
+          追踪
+        </label>
+      </div>
+      <p :class="{ warning: status.warning }">
+        <ShieldAlert v-if="status.warning" :size="16" />
+        <Bot v-else :size="16" />
+        {{ status.warning || providerHint }}
+      </p>
     </section>
 
     <section class="dashboard">
       <div class="metric">
-        <strong>{{ documents.length }}</strong>
+        <strong>{{ uniqueDocuments.length }}</strong>
         <span>知识库资料</span>
       </div>
       <div class="metric">
@@ -285,11 +339,11 @@ async function demoFlow() {
         </label>
         <button class="ghost" @click="loadSample"><Sparkles :size="17" /> 载入示例资料</button>
         <div class="doc-list">
-          <article v-for="doc in documents" :key="doc.id">
+          <article v-for="doc in uniqueDocuments" :key="doc.id">
             <strong>{{ doc.filename }}</strong>
-            <span>{{ doc.chunk_count }} 个切片</span>
-            <p>{{ doc.summary }}</p>
+            <span>{{ doc.chunk_count }} 个切片 · 已入库</span>
           </article>
+          <p v-if="!uniqueDocuments.length" class="empty">暂无资料，先上传或载入示例。</p>
         </div>
       </aside>
 
@@ -320,6 +374,13 @@ async function demoFlow() {
           </article>
         </div>
 
+        <div v-if="!chapters.length" class="empty-state">
+          <BrainCircuit :size="34" />
+          <h2>从知识库生成学习路径</h2>
+          <p>载入资料后点击“生成课程大纲”，系统会创建章节、学习目标和后续测验入口。</p>
+          <button class="primary" @click="generateOutline"><RefreshCw :size="17" /> 生成课程大纲</button>
+        </div>
+
         <article v-if="selectedChapter" class="content-panel">
           <h2>{{ selectedChapter.title }}</h2>
           <p class="objective">{{ selectedChapter.objective }}</p>
@@ -347,7 +408,7 @@ async function demoFlow() {
 
         <div class="wrong-list">
           <h3>错题归档</h3>
-          <article v-for="item in wrongs.slice(0, 4)" :key="item.id">
+          <article v-for="item in visibleWrongs" :key="item.id">
             <strong>{{ item.chapter_title }}</strong>
             <p>{{ item.question }}</p>
             <small>你的答案：{{ item.selected || '未选择' }}；正确答案：{{ item.answer }}</small>
@@ -364,4 +425,3 @@ async function demoFlow() {
     </section>
   </main>
 </template>
-

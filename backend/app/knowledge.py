@@ -31,6 +31,9 @@ def save_upload(file_name: str, content: bytes) -> Path:
 
 
 def build_knowledge(file_path: Path) -> dict:
+    existing = _existing_document(file_path.name)
+    if existing:
+        return existing
     docs = _load_documents(file_path)
     splitter = RecursiveCharacterTextSplitter(chunk_size=650, chunk_overlap=90)
     chunks = splitter.split_documents(docs)
@@ -104,6 +107,12 @@ def seed_sample_material() -> dict:
     return build_knowledge(target)
 
 
+def _existing_document(filename: str) -> dict | None:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM documents WHERE filename=? ORDER BY id DESC LIMIT 1", (filename,)).fetchone()
+    return dict(row) if row else None
+
+
 def _load_documents(file_path: Path) -> list[Document]:
     suffix = file_path.suffix.lower()
     if suffix in {".txt", ".md"}:
@@ -121,4 +130,3 @@ def _summarize_chunks(chunks: list[Document]) -> str:
     text = "\n".join(chunk.page_content for chunk in chunks[:3])
     text = re.sub(r"\s+", " ", text).strip()
     return text[:220] or "资料已加载，等待生成课程大纲。"
-
