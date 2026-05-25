@@ -62,7 +62,7 @@ const cloudLoading = ref(false)
 const testMessage = ref('')
 const activeView = ref('library')
 const face = reactive({ ok: false })
-const faceProfileState = reactive({ enrolled: false, username: '杨翰飞' })
+const faceProfileState = reactive({ enrolled: false, username: '杨翰飞', needsUpgrade: false })
 const faceManageOpen = ref(false)
 const faceReplaceToken = ref('')
 const maxUploadBytes = 25 * 1024 * 1024
@@ -185,6 +185,7 @@ async function refreshFaceProfile(username = faceProfileState.username) {
   const data = await faceProfile(username).catch(() => ({ enrolled: false, username }))
   faceProfileState.enrolled = data.enrolled
   faceProfileState.username = data.username
+  faceProfileState.needsUpgrade = Boolean(data.needs_upgrade)
 }
 
 async function enrollFace(payload) {
@@ -194,6 +195,7 @@ async function enrollFace(payload) {
   if (data?.ok) {
     faceProfileState.enrolled = true
     faceProfileState.username = data.username
+    faceProfileState.needsUpgrade = false
     faceManageOpen.value = false
     status.message = face.ok ? '授权人脸已重新录入，后续登录将使用新模板。' : '授权人脸已录入，请点击人脸识别登录。'
   }
@@ -211,7 +213,9 @@ async function verifyFace(payload) {
   } else if (data) {
     face.ok = false
     faceReplaceToken.value = ''
-    status.warning = data.message || '人脸比对未通过，请使用已录入账号本人登录。'
+    status.warning = data.distance
+      ? `人脸比对未通过，距离 ${data.distance} / 阈值 ${data.threshold}。`
+      : data.message || '人脸比对未通过，请使用已录入账号本人登录。'
   }
 }
 
@@ -389,6 +393,7 @@ function applyProviderDefaults() {
     :loading="status.loading"
     :message="status.warning || status.message"
     :enrolled="faceProfileState.enrolled"
+    :needs-upgrade="faceProfileState.needsUpgrade"
     :allow-reenroll="face.ok"
     @verify="verifyFace"
     @enroll="enrollFace"

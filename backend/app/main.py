@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .database import init_db
-from .face_auth import enroll_face, has_profile, verify_face
+from .face_auth import enroll_face, profile_info, verify_face
 from .knowledge import build_knowledge, clear_documents, delete_document, list_documents, save_upload
 from .providers import cloud_ollama_models, test_provider
 from .workflow import (
@@ -200,7 +200,7 @@ def wrong_answer_list() -> dict:
 
 @app.get("/api/face/profile")
 def face_profile(username: str = "杨翰飞") -> dict:
-    return {"username": username, "enrolled": has_profile(username)}
+    return profile_info(username)
 
 
 @app.post("/api/face/enroll")
