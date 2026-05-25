@@ -1,5 +1,5 @@
 <script setup>
-import { BrainCircuit, Mic, ScanFace } from 'lucide-vue-next'
+import { BrainCircuit, LogOut, Mic, ScanFace } from 'lucide-vue-next'
 
 defineProps({
   faceOk: Boolean,
@@ -8,7 +8,7 @@ defineProps({
   supported: Boolean
 })
 
-defineEmits(['manage-face', 'voice'])
+defineEmits(['manage-face', 'voice', 'logout'])
 </script>
 
 <template>
@@ -24,6 +24,9 @@ defineEmits(['manage-face', 'voice'])
       </button>
       <button :class="{ active: listening }" :disabled="!supported" @click="$emit('voice')">
         <Mic :size="18" /> {{ listening ? '停止语音' : '语音控制' }}
+      </button>
+      <button :disabled="loading" @click="$emit('logout')">
+        <LogOut :size="18" /> 退出登录
       </button>
     </div>
   </section>

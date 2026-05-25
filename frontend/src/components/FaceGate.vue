@@ -59,24 +59,26 @@ async function loadModels() {
   }
 }
 
-function enroll() {
+async function enroll() {
   if (props.enrolled && !props.allowReenroll) {
     cameraMessage.value = '该账号已录入授权人脸，未登录状态下不能覆盖模板。'
     return
   }
-  if (!descriptor.value) {
+  const currentDescriptor = await captureCurrentDescriptor()
+  if (!currentDescriptor) {
     cameraMessage.value = '请先采集到清晰人脸后再录入。'
     return
   }
-  emit('enroll', { username: username.value, descriptor: descriptor.value })
+  emit('enroll', { username: username.value, descriptor: currentDescriptor })
 }
 
-function verify() {
-  if (!descriptor.value) {
+async function verify() {
+  const currentDescriptor = await captureCurrentDescriptor()
+  if (!currentDescriptor) {
     cameraMessage.value = '请先采集到清晰人脸后再登录。'
     return
   }
-  emit('verify', { username: username.value, descriptor: descriptor.value })
+  emit('verify', { username: username.value, descriptor: currentDescriptor })
 }
 
 function startDetection() {
@@ -98,6 +100,28 @@ function startDetection() {
       cameraMessage.value = '人脸检测失败，请调整光线或重新开启摄像头。'
     }
   }, 900)
+}
+
+async function captureCurrentDescriptor() {
+  if (!video.value || video.value.readyState < 2 || !faceapi) return null
+  try {
+    const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.58 })
+    const faces = await faceapi.detectAllFaces(video.value, options).withFaceLandmarks().withFaceDescriptors()
+    if (faces.length !== 1) {
+      descriptor.value = null
+      faceDetected.value = false
+      cameraMessage.value = faces.length > 1 ? '当前画面有多张人脸，不能登录。' : '当前画面未检测到人脸。'
+      return null
+    }
+    const freshDescriptor = Array.from(faces[0].descriptor).map((item) => Number(item.toFixed(6)))
+    descriptor.value = freshDescriptor
+    faceDetected.value = true
+    cameraMessage.value = '已重新采集当前帧人脸特征，正在提交比对。'
+    return freshDescriptor
+  } catch {
+    cameraMessage.value = '当前帧人脸采集失败，请正对摄像头并保持光线充足。'
+    return null
+  }
 }
 
 onBeforeUnmount(() => {

@@ -208,7 +208,19 @@ async function verifyFace(payload) {
     status.message = Object.prototype.hasOwnProperty.call(data, 'distance')
       ? `人脸识别通过，距离 ${data.distance} / 阈值 ${data.threshold}，可以开始学习。`
       : `人脸识别通过，相似度 ${data.similarity}，可以开始学习。`
+  } else if (data) {
+    face.ok = false
+    faceReplaceToken.value = ''
+    status.warning = data.message || '人脸比对未通过，请使用已录入账号本人登录。'
   }
+}
+
+function logout() {
+  face.ok = false
+  faceManageOpen.value = false
+  faceReplaceToken.value = ''
+  status.warning = ''
+  status.message = '已退出登录，请重新进行人脸识别。'
 }
 
 async function handleUpload(event) {
@@ -390,6 +402,7 @@ function applyProviderDefaults() {
       :supported="supported"
       @manage-face="faceManageOpen = true"
       @voice="start"
+      @logout="logout"
     />
 
     <section class="app-status">
