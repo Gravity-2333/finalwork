@@ -6,6 +6,10 @@ import { chromium } from 'playwright-core'
 const root = resolve('.')
 const screenshotDir = resolve(root, 'screenshots')
 mkdirSync(screenshotDir, { recursive: true })
+const venvPython = resolve(root, '.venv', 'Scripts', 'python.exe')
+const python = existsSync(venvPython)
+  ? venvPython
+  : 'python'
 
 const browserCandidates = [
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
@@ -22,8 +26,7 @@ function run(command, args, cwd) {
   return spawn(command, args, {
     cwd,
     stdio: 'ignore',
-    windowsHide: true,
-    shell: process.platform === 'win32'
+    windowsHide: true
   })
 }
 
@@ -52,8 +55,11 @@ async function post(url, body = {}) {
   return response.json()
 }
 
-const backend = run('python', ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'], resolve(root, 'backend'))
-const frontend = run('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173'], resolve(root, 'frontend'))
+const backend = run(python, ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'], resolve(root, 'backend'))
+const frontend =
+  process.platform === 'win32'
+    ? run('cmd.exe', ['/d', '/s', '/c', 'npm', 'run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173'], resolve(root, 'frontend'))
+    : run('npm', ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '5173'], resolve(root, 'frontend'))
 
 try {
   await waitFor('http://127.0.0.1:8000/api/health')
@@ -81,4 +87,3 @@ try {
   backend.kill()
   frontend.kill()
 }
-

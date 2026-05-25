@@ -22,6 +22,21 @@ class ProviderError(RuntimeError):
 
 
 def mock_generate(prompt: str) -> str:
+    if "生成4个章节的学习大纲" in prompt:
+        return (
+            "人工智能课程概览 - 理解人工智能的发展脉络、应用场景和课程学习路径。\n"
+            "本地知识库学习方法 - 掌握资料上传、文本切割、检索和知识整理方法。\n"
+            "大语言模型与智能体应用 - 理解提示词、Provider 切换、LangGraph 编排和 LangSmith 追踪。\n"
+            "测验复盘与学习改进 - 通过在线测验、错题归档和进度记录形成闭环学习。"
+        )
+    if "输出 JSON 数组" in prompt:
+        return (
+            "["
+            "{\"question\":\"知识库构建的第一步通常是什么？\",\"options\":[\"上传并加载课程资料\",\"直接提交测验\",\"删除章节\",\"关闭服务\"],\"answer\":\"上传并加载课程资料\",\"explanation\":\"资料加载后才能进行切割、检索和生成。\"},"
+            "{\"question\":\"LangGraph 在本系统中的作用是什么？\",\"options\":[\"编排学习助手流程\",\"替代浏览器\",\"保存图片\",\"发送邮件\"],\"answer\":\"编排学习助手流程\",\"explanation\":\"LangGraph 负责串联检索、提示词组织和生成节点。\"},"
+            "{\"question\":\"错题归档最有助于完成哪项学习活动？\",\"options\":[\"定位薄弱点并复盘\",\"隐藏学习记录\",\"跳过章节内容\",\"减少资料数量\"],\"answer\":\"定位薄弱点并复盘\",\"explanation\":\"错题记录能帮助学生针对薄弱知识点再次学习。\"}"
+            "]"
+        )
     topic = prompt.splitlines()[0][:36] if prompt.strip() else "课程资料"
     return (
         f"基于当前知识库，围绕“{topic}”整理如下学习内容：\n"
@@ -116,4 +131,3 @@ def _call_openai_compatible(prompt: str, model: str, base_url: str, api_key: str
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"].strip()
-
