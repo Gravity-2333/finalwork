@@ -66,6 +66,7 @@ const faceProfileState = reactive({ enrolled: false, username: '杨翰飞', need
 const faceManageOpen = ref(false)
 const faceReplaceToken = ref('')
 const maxUploadBytes = 25 * 1024 * 1024
+let faceProfileLookupId = 0
 
 const providerDefaults = {
   mock: {
@@ -182,7 +183,10 @@ async function refreshChapters() {
 }
 
 async function refreshFaceProfile(username = faceProfileState.username) {
-  const data = await faceProfile(username).catch(() => ({ enrolled: false, username }))
+  const normalized = (username || '杨翰飞').trim() || '杨翰飞'
+  const lookupId = (faceProfileLookupId += 1)
+  const data = await faceProfile(normalized).catch(() => ({ enrolled: false, username: normalized }))
+  if (lookupId !== faceProfileLookupId) return
   faceProfileState.enrolled = data.enrolled
   faceProfileState.username = data.username
   faceProfileState.needsUpgrade = Boolean(data.needs_upgrade)
@@ -394,10 +398,12 @@ function applyProviderDefaults() {
     :message="status.warning || status.message"
     :enrolled="faceProfileState.enrolled"
     :needs-upgrade="faceProfileState.needsUpgrade"
+    :username="faceProfileState.username"
     :allow-reenroll="face.ok"
     @verify="verifyFace"
     @enroll="enrollFace"
     @cancel="faceManageOpen = false"
+    @username-change="refreshFaceProfile"
   />
   <main v-else class="app-shell">
     <HeroHeader

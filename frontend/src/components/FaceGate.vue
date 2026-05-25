@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, ref } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { Camera, LogIn, ScanFace, ShieldCheck, UserPlus } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -7,12 +7,13 @@ const props = defineProps({
   message: { type: String, default: '' },
   enrolled: Boolean,
   allowReenroll: Boolean,
-  needsUpgrade: Boolean
+  needsUpgrade: Boolean,
+  username: { type: String, default: '杨翰飞' }
 })
 
-const emit = defineEmits(['verify', 'enroll', 'cancel'])
+const emit = defineEmits(['verify', 'enroll', 'cancel', 'username-change'])
 const video = ref(null)
-const username = ref('杨翰飞')
+const username = ref(props.username || '杨翰飞')
 const cameraMessage = ref('请开启摄像头采集账号本人面部。')
 const cameraReady = ref(false)
 const faceDetected = ref(false)
@@ -23,6 +24,23 @@ let detectTimer = null
 let loadingModels = false
 let modelPromise = null
 let faceapi = null
+let usernameTimer = null
+
+watch(
+  () => props.username,
+  (value) => {
+    if (value && value !== username.value) username.value = value
+  }
+)
+
+watch(username, (value) => {
+  if (props.allowReenroll) return
+  clearTimeout(usernameTimer)
+  usernameTimer = setTimeout(() => {
+    const normalized = normalizeUsername(value)
+    emit('username-change', normalized)
+  }, 260)
+})
 
 async function startCamera() {
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -70,7 +88,7 @@ async function enroll() {
     cameraMessage.value = '请先采集到清晰人脸后再录入。'
     return
   }
-  emit('enroll', { username: username.value, descriptor: currentDescriptor })
+  emit('enroll', { username: normalizeUsername(username.value), descriptor: currentDescriptor })
 }
 
 async function verify() {
@@ -79,7 +97,7 @@ async function verify() {
     cameraMessage.value = '请先采集到清晰人脸后再登录。'
     return
   }
-  emit('verify', { username: username.value, descriptor: currentDescriptor })
+  emit('verify', { username: normalizeUsername(username.value), descriptor: currentDescriptor })
 }
 
 function startDetection() {
@@ -189,9 +207,14 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function normalizeUsername(value) {
+  return value.trim() || '杨翰飞'
+}
+
 onBeforeUnmount(() => {
   if (stream) stream.getTracks().forEach((track) => track.stop())
   if (detectTimer) clearInterval(detectTimer)
+  clearTimeout(usernameTimer)
 })
 </script>
 
@@ -204,7 +227,7 @@ onBeforeUnmount(() => {
         <p>{{ allowReenroll ? '重新采集账号本人脸部模板，保存后后续登录将使用新模板。' : '首次使用需录入账号本人脸部模板；之后登录必须通过当前摄像头人脸比对。' }}</p>
         <label class="account-field">
           <span>账号</span>
-          <input v-model="username" placeholder="请输入账号姓名" />
+          <input v-model="username" :disabled="allowReenroll" placeholder="请输入账号姓名" />
         </label>
         <p class="enroll-state">{{ needsUpgrade ? '该账号人脸模板版本较旧，请重新录入一次升级模板。' : enrolled ? (allowReenroll ? '已登录，可重新录入授权人脸。' : '该账号已录入授权人脸，请直接核验登录。') : '该账号尚未录入授权人脸，请先录入。' }}</p>
       </div>
