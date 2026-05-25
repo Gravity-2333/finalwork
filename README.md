@@ -17,10 +17,10 @@
 后端：
 
 ```bash
-cd backend
 python -m venv .venv
 .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r backend\requirements.txt
+cd backend
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
@@ -34,6 +34,17 @@ npm run dev -- --host 127.0.0.1 --port 5173
 
 打开 `http://127.0.0.1:5173`。
 
+生成截图与报告：
+
+```bash
+npm install
+cd frontend
+npm install
+cd ..
+npm run screenshots
+npm run report
+```
+
 ## 环境变量
 
 - `OLLAMA_API_KEY`：云端 Ollama / OpenAI-compatible Ollama 可选密钥。
@@ -41,4 +52,3 @@ npm run dev -- --host 127.0.0.1 --port 5173
 - `LANGSMITH_API_KEY`：LangSmith 可选追踪密钥，默认不启用。
 
 没有密钥时可使用 `mock` Provider 完成演示。
-

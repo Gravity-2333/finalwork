@@ -5,10 +5,9 @@
   "type": "module",
   "scripts": {
     "screenshots": "node scripts/capture-screenshots.mjs",
-    "report": "python scripts/generate_report.py"
+    "report": "node scripts/run-report.mjs"
   },
   "dependencies": {
     "playwright-core": "^1.49.1"
   }
 }
-
