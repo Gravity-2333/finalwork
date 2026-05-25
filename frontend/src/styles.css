@@ -2,6 +2,7 @@
   color: #172033;
   background: #f3f6fb;
   font-family: "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+  font-size: 16px;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -26,7 +27,7 @@ button {
   border-radius: 8px;
   background: #fff;
   color: #1f2a3d;
-  min-height: 38px;
+  min-height: 36px;
   padding: 0 14px;
   display: inline-flex;
   align-items: center;
@@ -73,7 +74,7 @@ button:disabled {
 }
 
 .hero {
-  min-height: 230px;
+  min-height: 210px;
   display: flex;
   justify-content: space-between;
   gap: 24px;
@@ -113,7 +114,7 @@ button:disabled {
 
 h1 {
   margin: 16px 0 8px;
-  font-size: clamp(42px, 6vw, 70px);
+  font-size: clamp(38px, 4.4vw, 56px);
   letter-spacing: 0;
   line-height: 1;
 }
@@ -122,23 +123,31 @@ h1 {
   max-width: 760px;
   margin: 0;
   line-height: 1.7;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .hero-actions {
   justify-content: flex-end;
 }
 
-.hero-actions button {
+.hero-actions button,
+.face-button {
   background: rgba(255, 255, 255, 0.96);
   color: #173b72;
   min-width: 132px;
 }
 
-.hero-actions .primary {
+.face-button {
   background: #fff;
   border-color: #fff;
   color: #1f6fe5;
+  font-weight: 700;
+}
+
+.face-button.verified {
+  background: #e8fff6;
+  border-color: #9ae6c6;
+  color: #007a63;
 }
 
 .provider-panel,
@@ -202,7 +211,7 @@ h1 {
 .provider-panel input,
 .provider-panel select {
   width: 100%;
-  min-height: 38px;
+  min-height: 36px;
   border: 1px solid #cfdbea;
   border-radius: 8px;
   padding: 0 10px;
@@ -212,8 +221,17 @@ h1 {
 .provider-panel .toggle {
   display: flex;
   align-items: center;
+  gap: 8px;
   white-space: nowrap;
   padding-top: 20px;
+}
+
+.provider-panel input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  padding: 0;
+  accent-color: #1f6fe5;
 }
 
 .provider-panel p {
@@ -242,7 +260,7 @@ h1 {
 
 .metric strong {
   display: block;
-  font-size: 34px;
+  font-size: 30px;
   color: #1f6fe5;
   line-height: 1;
 }

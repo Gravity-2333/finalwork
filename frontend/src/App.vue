@@ -262,8 +262,8 @@ function applyProviderDefaults() {
         <p>把课程资料转成可学习、可测验、可复盘的个人知识库。</p>
       </div>
       <div class="hero-actions">
-        <button class="primary" :disabled="status.loading" @click="verifyFace">
-          <ScanFace :size="18" /> 人脸核验
+        <button :class="['face-button', { verified: face.ok }]" :disabled="status.loading" @click="verifyFace">
+          <ScanFace :size="18" /> {{ face.ok ? '已核验' : '人脸核验' }}
         </button>
         <button :class="{ active: listening }" :disabled="!supported" @click="start">
           <Mic :size="18" /> 语音控制
