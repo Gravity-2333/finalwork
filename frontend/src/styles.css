@@ -172,6 +172,22 @@ button:disabled {
   color: #637089;
 }
 
+.login-tip.info {
+  color: #52637a;
+}
+
+.login-tip.pending {
+  color: #8a5a00;
+}
+
+.login-tip.success {
+  color: #047857;
+}
+
+.login-tip.error {
+  color: #c2410c;
+}
+
 .hero {
   min-height: 150px;
   display: flex;

@@ -192,6 +192,14 @@ async function refreshFaceProfile(username = faceProfileState.username) {
   faceProfileState.needsUpgrade = Boolean(data.needs_upgrade)
 }
 
+function handleFaceUsernameChange(username) {
+  const normalized = (username || '杨翰飞').trim() || '杨翰飞'
+  faceProfileState.username = normalized
+  faceProfileState.enrolled = false
+  faceProfileState.needsUpgrade = false
+  refreshFaceProfile(normalized)
+}
+
 async function enrollFace(payload) {
   const data = await runTask('正在录入授权人脸模板...', () =>
     faceEnroll({ ...payload, allow_replace: face.ok, replace_token: face.ok ? faceReplaceToken.value : '' })
@@ -403,7 +411,7 @@ function applyProviderDefaults() {
     @verify="verifyFace"
     @enroll="enrollFace"
     @cancel="faceManageOpen = false"
-    @username-change="refreshFaceProfile"
+    @username-change="handleFaceUsernameChange"
   />
   <main v-else class="app-shell">
     <HeroHeader

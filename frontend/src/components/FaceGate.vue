@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { Camera, LogIn, ScanFace, ShieldCheck, UserPlus } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -19,12 +19,25 @@ const cameraReady = ref(false)
 const faceDetected = ref(false)
 const descriptor = ref(null)
 const modelsLoaded = ref(false)
+const cameraStarting = ref(false)
+const captureBusy = ref(false)
 let stream = null
 let detectTimer = null
 let loadingModels = false
 let modelPromise = null
 let faceapi = null
 let usernameTimer = null
+let captureRunId = 0
+const CAPTURE_TIMEOUT_MS = 6500
+const FRAME_TIMEOUT_MS = 1800
+const interactionLocked = computed(() => props.loading || captureBusy.value || cameraStarting.value)
+const tipKind = computed(() => {
+  const text = props.message || cameraMessage.value
+  if (/未通过|失败|不可用|未授权|不能|异常|错误/.test(text)) return 'error'
+  if (/请|正在|升级|尚未|保持|等待/.test(text)) return 'pending'
+  if (/通过|已完成|已采集|已录入|已登录|可登录|可录入/.test(text)) return 'success'
+  return 'info'
+})
 
 watch(
   () => props.username,
@@ -35,6 +48,9 @@ watch(
 
 watch(username, (value) => {
   if (props.allowReenroll) return
+  descriptor.value = null
+  faceDetected.value = false
+  cameraMessage.value = '账号已切换，正在查询该账号的人脸状态。'
   clearTimeout(usernameTimer)
   usernameTimer = setTimeout(() => {
     const normalized = normalizeUsername(value)
@@ -43,12 +59,15 @@ watch(username, (value) => {
 })
 
 async function startCamera() {
+  if (cameraStarting.value || captureBusy.value) return
   if (!navigator.mediaDevices?.getUserMedia) {
     cameraMessage.value = '当前环境无法访问摄像头，不能进行人脸识别登录。'
     return
   }
   try {
+    cameraStarting.value = true
     await loadModels()
+    stopCamera()
     stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
     video.value.srcObject = stream
     cameraReady.value = true
@@ -56,6 +75,8 @@ async function startCamera() {
     startDetection()
   } catch {
     cameraMessage.value = '摄像头未授权、模型加载失败或设备不可用，无法完成安全登录。'
+  } finally {
+    cameraStarting.value = false
   }
 }
 
@@ -79,22 +100,22 @@ async function loadModels() {
 }
 
 async function enroll() {
+  if (interactionLocked.value) return
   if (props.enrolled && !props.allowReenroll && !props.needsUpgrade) {
     cameraMessage.value = '该账号已录入授权人脸，未登录状态下不能覆盖模板。'
     return
   }
   const currentDescriptor = await captureStableDescriptor()
   if (!currentDescriptor) {
-    cameraMessage.value = '请先采集到清晰人脸后再录入。'
     return
   }
   emit('enroll', { username: normalizeUsername(username.value), descriptor: currentDescriptor })
 }
 
 async function verify() {
+  if (interactionLocked.value) return
   const currentDescriptor = await captureStableDescriptor()
   if (!currentDescriptor) {
-    cameraMessage.value = '请先采集到清晰人脸后再登录。'
     return
   }
   emit('verify', { username: normalizeUsername(username.value), descriptor: currentDescriptor })
@@ -103,6 +124,7 @@ async function verify() {
 function startDetection() {
   if (detectTimer) clearInterval(detectTimer)
   detectTimer = setInterval(async () => {
+    if (captureBusy.value) return
     if (!video.value || video.value.readyState < 2) return
     try {
       const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.55 })
@@ -121,11 +143,12 @@ function startDetection() {
   }, 900)
 }
 
-async function captureCurrentDescriptor() {
+async function captureCurrentDescriptor(runId) {
   if (!video.value || video.value.readyState < 2 || !faceapi) return null
   try {
     const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.58 })
     const faces = await faceapi.detectAllFaces(video.value, options).withFaceLandmarks().withFaceDescriptors()
+    if (runId !== captureRunId) return null
     if (faces.length !== 1) {
       descriptor.value = null
       faceDetected.value = false
@@ -138,30 +161,41 @@ async function captureCurrentDescriptor() {
     cameraMessage.value = '已重新采集当前帧人脸特征，正在提交比对。'
     return freshDescriptor
   } catch {
-    cameraMessage.value = '当前帧人脸采集失败，请正对摄像头并保持光线充足。'
+    if (runId === captureRunId) cameraMessage.value = '当前帧人脸采集失败，请正对摄像头并保持光线充足。'
     return null
   }
 }
 
 async function captureStableDescriptor() {
-  cameraMessage.value = '正在连续采集当前人脸，请保持不动。'
-  const samples = []
-  for (let index = 0; index < 5; index += 1) {
-    const current = await captureCurrentDescriptor()
-    if (!current) return null
-    samples.push(current)
-    await wait(160)
+  const runId = ++captureRunId
+  const startedAt = Date.now()
+  captureBusy.value = true
+  try {
+    cameraMessage.value = '正在连续采集当前人脸，请保持不动。'
+    const samples = []
+    for (let index = 0; index < 5; index += 1) {
+      if (Date.now() - startedAt > CAPTURE_TIMEOUT_MS) {
+        cameraMessage.value = '人脸检测超时，请重新点击识别。'
+        return null
+      }
+      const current = await withTimeout(captureCurrentDescriptor(runId), FRAME_TIMEOUT_MS)
+      if (!current) return null
+      samples.push(current)
+      await wait(160)
+    }
+    const averaged = averageDescriptors(samples)
+    const maxDrift = Math.max(...samples.map((item) => descriptorDistance(item, averaged)))
+    if (maxDrift > 0.18) {
+      descriptor.value = null
+      cameraMessage.value = '连续采集的人脸特征不稳定，请保持面部居中并重新尝试。'
+      return null
+    }
+    descriptor.value = averaged
+    cameraMessage.value = '已完成多帧稳定采样，正在提交比对。'
+    return averaged
+  } finally {
+    captureBusy.value = false
   }
-  const averaged = averageDescriptors(samples)
-  const maxDrift = Math.max(...samples.map((item) => descriptorDistance(item, averaged)))
-  if (maxDrift > 0.18) {
-    descriptor.value = null
-    cameraMessage.value = '连续采集的人脸特征不稳定，请保持面部居中并重新尝试。'
-    return null
-  }
-  descriptor.value = averaged
-  cameraMessage.value = '已完成多帧稳定采样，正在提交比对。'
-  return averaged
 }
 
 function averageDescriptors(samples) {
@@ -207,13 +241,31 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function withTimeout(promise, timeoutMs) {
+  let timer = null
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      captureRunId += 1
+      cameraMessage.value = '单帧人脸检测超时，请检查摄像头画面后重试。'
+      resolve(null)
+    }, timeoutMs)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 function normalizeUsername(value) {
   return value.trim() || '杨翰飞'
 }
 
-onBeforeUnmount(() => {
+function stopCamera() {
   if (stream) stream.getTracks().forEach((track) => track.stop())
   if (detectTimer) clearInterval(detectTimer)
+  stream = null
+  detectTimer = null
+}
+
+onBeforeUnmount(() => {
+  stopCamera()
   clearTimeout(usernameTimer)
 })
 </script>
@@ -241,18 +293,18 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="login-actions">
-        <button @click="startCamera"><Camera :size="18" /> 开启摄像头</button>
-        <button :disabled="loading || (enrolled && !allowReenroll && !needsUpgrade) || !descriptor" @click="enroll">
-          <UserPlus :size="18" /> {{ allowReenroll ? '保存新模板' : needsUpgrade ? '升级模板' : '录入人脸' }}
+        <button :disabled="interactionLocked" @click="startCamera"><Camera :size="18" /> {{ cameraStarting ? '正在开启' : '开启摄像头' }}</button>
+        <button :disabled="interactionLocked || (enrolled && !allowReenroll && !needsUpgrade) || !descriptor" @click="enroll">
+          <UserPlus :size="18" /> {{ captureBusy ? '采集中' : allowReenroll ? '保存新模板' : needsUpgrade ? '升级模板' : '录入人脸' }}
         </button>
-        <button v-if="!allowReenroll" class="primary" :disabled="loading || !enrolled || needsUpgrade || !descriptor" @click="verify">
-          <LogIn :size="18" /> 人脸识别登录
+        <button v-if="!allowReenroll" class="primary" :disabled="interactionLocked || !enrolled || needsUpgrade || !descriptor" @click="verify">
+          <LogIn :size="18" /> {{ captureBusy ? '识别中' : '人脸识别登录' }}
         </button>
-        <button v-else class="primary" @click="$emit('cancel')">
+        <button v-else class="primary" :disabled="interactionLocked" @click="$emit('cancel')">
           返回工作台
         </button>
       </div>
-      <p class="login-tip">{{ message || cameraMessage }}</p>
+      <p :class="['login-tip', tipKind]">{{ message || cameraMessage }}</p>
     </section>
   </main>
 </template>
