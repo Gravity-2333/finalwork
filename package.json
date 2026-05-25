@@ -1,0 +1,14 @@
+{
+  "name": "ai-study-assistant-delivery",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "screenshots": "node scripts/capture-screenshots.mjs",
+    "report": "python scripts/generate_report.py"
+  },
+  "dependencies": {
+    "playwright-core": "^1.49.1"
+  }
+}
+
