@@ -12,7 +12,9 @@ import {
   createChapterContent,
   createOutline,
   createQuiz,
+  faceEnroll,
   faceLogin,
+  faceProfile,
   health,
   listCloudOllamaModels,
   listChapters,
@@ -58,6 +60,7 @@ const cloudLoading = ref(false)
 const testMessage = ref('')
 const activeView = ref('library')
 const face = reactive({ ok: false })
+const faceProfileState = reactive({ enrolled: false, username: '杨翰飞' })
 
 const providerDefaults = {
   mock: {
@@ -123,6 +126,7 @@ const { listening, supported, transcript, start } = useVoiceCommands({
 
 onMounted(async () => {
   applyProviderDefaults()
+  await refreshFaceProfile()
   await refreshHealth()
   await refreshDocuments()
   await refreshChapters()
@@ -172,11 +176,27 @@ async function refreshChapters() {
   selectedChapterId.value = chapters.value[0]?.id || null
 }
 
-async function verifyFace() {
-  const data = await runTask('正在进行人脸核验...', faceLogin)
+async function refreshFaceProfile(username = faceProfileState.username) {
+  const data = await faceProfile(username).catch(() => ({ enrolled: false, username }))
+  faceProfileState.enrolled = data.enrolled
+  faceProfileState.username = data.username
+}
+
+async function enrollFace(payload) {
+  const data = await runTask('正在录入授权人脸模板...', () => faceEnroll(payload))
+  if (data?.ok) {
+    faceProfileState.enrolled = true
+    faceProfileState.username = data.username
+    status.message = '授权人脸已录入，请点击人脸识别登录。'
+  }
+}
+
+async function verifyFace(payload) {
+  const data = await runTask('正在进行人脸特征比对...', () => faceLogin(payload))
   if (data?.ok) {
     face.ok = true
-    status.message = '人脸核验通过，可以开始学习。'
+    faceProfileState.username = data.username
+    status.message = `人脸识别通过，相似度 ${data.similarity}，可以开始学习。`
   }
 }
 
@@ -304,7 +324,14 @@ function applyProviderDefaults() {
 </script>
 
 <template>
-  <FaceGate v-if="!face.ok" :loading="status.loading" :message="status.warning || status.message" @verify="verifyFace" />
+  <FaceGate
+    v-if="!face.ok"
+    :loading="status.loading"
+    :message="status.warning || status.message"
+    :enrolled="faceProfileState.enrolled"
+    @verify="verifyFace"
+    @enroll="enrollFace"
+  />
   <main v-else class="app-shell">
     <HeroHeader
       :face-ok="face.ok"

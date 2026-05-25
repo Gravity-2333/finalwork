@@ -73,6 +73,13 @@ def init_db() -> None:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(quiz_id) REFERENCES quizzes(id) ON DELETE CASCADE
             );
+
+            CREATE TABLE IF NOT EXISTS face_profiles (
+                username TEXT PRIMARY KEY,
+                descriptor TEXT NOT NULL,
+                threshold REAL NOT NULL DEFAULT 0.82,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
 
@@ -87,4 +94,3 @@ def decode_options(value: str) -> list[str]:
     except json.JSONDecodeError:
         return []
     return parsed if isinstance(parsed, list) else []
-

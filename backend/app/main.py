@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .database import init_db
+from .face_auth import enroll_face, has_profile, verify_face
 from .knowledge import build_knowledge, list_documents, save_upload
 from .providers import cloud_ollama_models, test_provider
 from .workflow import (
@@ -35,6 +36,11 @@ class ProviderConfig(BaseModel):
 
 class SubmitPayload(BaseModel):
     answers: dict[str, str]
+
+
+class FacePayload(BaseModel):
+    username: str = "杨翰飞"
+    descriptor: list[float]
 
 
 app = FastAPI(title="AI 学习助手", version="1.0.0")
@@ -144,14 +150,30 @@ def wrong_answer_list() -> dict:
     return {"wrong_answers": wrong_answers()}
 
 
+@app.get("/api/face/profile")
+def face_profile(username: str = "杨翰飞") -> dict:
+    return {"username": username, "enrolled": has_profile(username)}
+
+
+@app.post("/api/face/enroll")
+def face_enroll(payload: FacePayload) -> dict:
+    try:
+        return enroll_face(payload.username, payload.descriptor)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/face-login")
-def face_login(name: str = Form("杨翰飞"), demo: bool = Form(True)) -> dict:
-    return {
-        "ok": True,
-        "name": name,
-        "mode": "demo" if demo else "camera",
-        "message": "人脸核验通过，已进入 AI 学习助手。",
-    }
+def face_login(payload: FacePayload) -> dict:
+    try:
+        result = verify_face(payload.username, payload.descriptor)
+        if not result["ok"]:
+            raise HTTPException(status_code=401, detail=result["message"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _configure_langsmith(config: ProviderConfig) -> None:

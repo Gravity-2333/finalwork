@@ -107,6 +107,27 @@ button:disabled {
   line-height: 1.75;
 }
 
+.account-field {
+  display: grid;
+  gap: 6px;
+  max-width: 340px;
+  margin-top: 18px;
+  color: #52637a;
+}
+
+.account-field input {
+  min-height: 38px;
+  border: 1px solid #cfdbea;
+  border-radius: 8px;
+  padding: 0 10px;
+}
+
+.enroll-state {
+  margin-top: 10px;
+  font-weight: 700;
+  color: #173b72;
+}
+
 .camera-panel {
   position: relative;
   aspect-ratio: 4 / 3;

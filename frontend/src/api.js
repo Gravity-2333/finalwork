@@ -79,9 +79,22 @@ export function listCloudOllamaModels(config) {
   })
 }
 
-export function faceLogin() {
-  const form = new FormData()
-  form.append('name', '杨翰飞')
-  form.append('demo', 'true')
-  return request('/face-login', { method: 'POST', body: form })
+export function faceProfile(username = '杨翰飞') {
+  return request(`/face/profile?username=${encodeURIComponent(username)}`)
+}
+
+export function faceEnroll(payload) {
+  return request('/face/enroll', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  })
+}
+
+export function faceLogin(payload) {
+  return request('/face-login', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  })
 }
