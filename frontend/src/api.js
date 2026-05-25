@@ -23,6 +23,12 @@ export function uploadDocument(file) {
   return request('/documents/upload', { method: 'POST', body: form })
 }
 
+export function uploadDocuments(files) {
+  const form = new FormData()
+  files.forEach((file) => form.append('files', file))
+  return request('/documents/upload-batch', { method: 'POST', body: form })
+}
+
 export function createOutline(config) {
   return request('/outline', {
     method: 'POST',

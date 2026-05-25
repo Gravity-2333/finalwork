@@ -22,6 +22,9 @@ from .workflow import (
 )
 
 
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+MAX_BATCH_FILES = 10
+
 Provider = Literal["local_ollama", "cloud_ollama", "openai_compatible", "mock"]
 
 
@@ -76,12 +79,40 @@ def documents() -> dict:
 @app.post("/api/documents/upload")
 async def upload_document(file: UploadFile = File(...)) -> dict:
     try:
-        content = await file.read()
+        content = await _read_upload(file)
         path = save_upload(file.filename or "material.txt", content)
         document = build_knowledge(path)
         return {"document": document}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/documents/upload-batch")
+async def upload_documents(files: list[UploadFile] = File(...)) -> dict:
+    if len(files) > MAX_BATCH_FILES:
+        raise HTTPException(status_code=400, detail=f"一次最多上传 {MAX_BATCH_FILES} 个文件。")
+    documents = []
+    errors = []
+    for file in files:
+        try:
+            content = await _read_upload(file)
+            path = save_upload(file.filename or "material.txt", content)
+            documents.append(build_knowledge(path))
+        except Exception as exc:
+            errors.append({"filename": file.filename or "未命名文件", "message": str(exc)})
+    if not documents and errors:
+        raise HTTPException(status_code=400, detail="；".join(f"{item['filename']}：{item['message']}" for item in errors))
+    return {"documents": documents, "errors": errors}
+
+
+async def _read_upload(file: UploadFile) -> bytes:
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        limit_mb = MAX_UPLOAD_BYTES // 1024 // 1024
+        raise ValueError(f"单个文件不能超过 {limit_mb}MB，请压缩或拆分后再上传。")
+    if not content:
+        raise ValueError("上传文件为空，请选择有效资料。")
+    return content
 
 
 @app.post("/api/outline")

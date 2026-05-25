@@ -6,7 +6,8 @@ import math
 from .database import connect
 
 
-DEFAULT_THRESHOLD = 0.86
+DEFAULT_COSINE_THRESHOLD = 0.86
+DEFAULT_FACEAPI_DISTANCE_THRESHOLD = 0.52
 SUPPORTED_DESCRIPTOR_LENGTHS = {128, 1024}
 
 
@@ -19,6 +20,9 @@ def has_profile(username: str) -> bool:
 def enroll_face(username: str, descriptor: list[float]) -> dict:
     clean = _validate_descriptor(descriptor)
     with connect() as conn:
+        existing = conn.execute("SELECT descriptor FROM face_profiles WHERE username=?", (username,)).fetchone()
+        if existing and len(json.loads(existing["descriptor"])) == 128:
+            raise ValueError("该账号已录入授权人脸，未登录状态下不能覆盖人脸模板。")
         conn.execute(
             """
             INSERT INTO face_profiles(username, descriptor, threshold, updated_at)
@@ -28,7 +32,7 @@ def enroll_face(username: str, descriptor: list[float]) -> dict:
                 threshold=excluded.threshold,
                 updated_at=CURRENT_TIMESTAMP
             """,
-            (username, json.dumps(clean), DEFAULT_THRESHOLD),
+            (username, json.dumps(clean), _default_threshold(clean)),
         )
     return {"ok": True, "username": username, "message": "授权人脸模板已录入。"}
 
@@ -42,8 +46,27 @@ def verify_face(username: str, descriptor: list[float]) -> dict:
     enrolled = json.loads(row["descriptor"])
     if len(enrolled) != len(probe):
         raise ValueError("人脸模板版本已更新，请重新录入账号本人脸部模板后再登录。")
+    threshold = _effective_threshold(probe, float(row["threshold"]))
+    if len(probe) == 128:
+        distance = _euclidean_distance(enrolled, probe)
+        if distance > threshold:
+            return {
+                "ok": False,
+                "username": username,
+                "distance": round(distance, 4),
+                "threshold": threshold,
+                "metric": "euclidean_distance",
+                "message": "人脸比对未通过，请使用已录入账号本人登录。",
+            }
+        return {
+            "ok": True,
+            "username": username,
+            "distance": round(distance, 4),
+            "threshold": threshold,
+            "metric": "euclidean_distance",
+            "message": "人脸识别通过，已进入 AI 学习助手。",
+        }
     similarity = _cosine_similarity(enrolled, probe)
-    threshold = float(row["threshold"])
     if similarity < threshold:
         return {
             "ok": False,
@@ -77,3 +100,19 @@ def _cosine_similarity(left: list[float], right: list[float]) -> float:
     if left_norm == 0 or right_norm == 0:
         return 0.0
     return dot / (left_norm * right_norm)
+
+
+def _euclidean_distance(left: list[float], right: list[float]) -> float:
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(left, right)))
+
+
+def _default_threshold(descriptor: list[float]) -> float:
+    if len(descriptor) == 128:
+        return DEFAULT_FACEAPI_DISTANCE_THRESHOLD
+    return DEFAULT_COSINE_THRESHOLD
+
+
+def _effective_threshold(descriptor: list[float], stored_threshold: float) -> float:
+    if len(descriptor) == 128:
+        return DEFAULT_FACEAPI_DISTANCE_THRESHOLD
+    return stored_threshold

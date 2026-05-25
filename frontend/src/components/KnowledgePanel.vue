@@ -19,9 +19,9 @@ function onUpload(event) {
       <h2>资料与知识库</h2>
     </div>
     <label class="upload-box">
-      <input type="file" accept=".txt,.md,.docx,.pdf" @change="onUpload" />
-      <span>上传课程资料</span>
-      <small>支持 txt / md / docx / pdf</small>
+      <input type="file" multiple accept=".txt,.md,.docx,.pdf" @change="onUpload" />
+      <span>批量上传课程资料</span>
+      <small>支持 txt / md / docx / pdf，单个文件不超过 25MB</small>
     </label>
     <div class="doc-list">
       <article v-for="doc in documents" :key="doc.id">
@@ -32,4 +32,3 @@ function onUpload(event) {
     </div>
   </aside>
 </template>
-

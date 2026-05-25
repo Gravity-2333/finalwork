@@ -22,7 +22,7 @@ import {
   listWrongAnswers,
   submitQuiz,
   testProvider,
-  uploadDocument
+  uploadDocuments
 } from './api'
 import { useVoiceCommands } from './useVoice'
 
@@ -61,6 +61,7 @@ const testMessage = ref('')
 const activeView = ref('library')
 const face = reactive({ ok: false })
 const faceProfileState = reactive({ enrolled: false, username: '杨翰飞' })
+const maxUploadBytes = 25 * 1024 * 1024
 
 const providerDefaults = {
   mock: {
@@ -196,18 +197,30 @@ async function verifyFace(payload) {
   if (data?.ok) {
     face.ok = true
     faceProfileState.username = data.username
-    status.message = `人脸识别通过，相似度 ${data.similarity}，可以开始学习。`
+    status.message = Object.prototype.hasOwnProperty.call(data, 'distance')
+      ? `人脸识别通过，距离 ${data.distance} / 阈值 ${data.threshold}，可以开始学习。`
+      : `人脸识别通过，相似度 ${data.similarity}，可以开始学习。`
   }
 }
 
 async function handleUpload(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  const data = await runTask('正在上传并切割课程资料...', () => uploadDocument(file))
+  const files = Array.from(event.target.files || [])
+  event.target.value = ''
+  if (!files.length) return
+  const oversized = files.filter((file) => file.size > maxUploadBytes)
+  if (oversized.length) {
+    status.warning = `单个文件不能超过 25MB：${oversized.map((file) => file.name).join('、')}`
+    return
+  }
+  const data = await runTask(`正在上传并切割 ${files.length} 个课程资料...`, () => uploadDocuments(files))
   if (data) {
-    status.message = `已构建知识库：${data.document.filename}，共 ${data.document.chunk_count} 个片段。`
+    const documents = data.documents || []
+    const errors = data.errors || []
+    const totalChunks = documents.reduce((sum, doc) => sum + doc.chunk_count, 0)
+    status.message = `已入库 ${documents.length} 个资料，共 ${totalChunks} 个片段。`
+    status.warning = errors.length ? `部分文件未入库：${errors.map((item) => `${item.filename} ${item.message}`).join('；')}` : ''
     await refreshDocuments()
-    activeView.value = 'study'
+    if (documents.length) activeView.value = 'study'
   }
 }
 

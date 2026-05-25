@@ -2,7 +2,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 import { Camera, LogIn, ScanFace, ShieldCheck, UserPlus } from 'lucide-vue-next'
 
-defineProps({
+const props = defineProps({
   loading: Boolean,
   message: { type: String, default: '' },
   enrolled: Boolean
@@ -59,6 +59,10 @@ async function loadModels() {
 }
 
 function enroll() {
+  if (props.enrolled) {
+    cameraMessage.value = '该账号已录入授权人脸，未登录状态下不能覆盖模板。'
+    return
+  }
   if (!descriptor.value) {
     cameraMessage.value = '请先采集到清晰人脸后再录入。'
     return
@@ -112,7 +116,7 @@ onBeforeUnmount(() => {
           <span>账号</span>
           <input v-model="username" placeholder="请输入账号姓名" />
         </label>
-        <p class="enroll-state">{{ enrolled ? '该账号已录入授权人脸。' : '该账号尚未录入授权人脸，请先录入。' }}</p>
+        <p class="enroll-state">{{ enrolled ? '该账号已录入授权人脸，请直接核验登录。' : '该账号尚未录入授权人脸，请先录入。' }}</p>
       </div>
 
       <div class="camera-panel">
@@ -125,7 +129,7 @@ onBeforeUnmount(() => {
 
       <div class="login-actions">
         <button @click="startCamera"><Camera :size="18" /> 开启摄像头</button>
-        <button :disabled="loading || !descriptor" @click="enroll">
+        <button :disabled="loading || enrolled || !descriptor" @click="enroll">
           <UserPlus :size="18" /> 录入人脸
         </button>
         <button class="primary" :disabled="loading || !enrolled || !descriptor" @click="verify">
