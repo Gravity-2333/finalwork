@@ -17,7 +17,6 @@ export function useVoiceCommands(handlers) {
     recognition.onresult = (event) => {
       const text = event.results[0][0].transcript
       transcript.value = text
-      if (text.includes('上传') || text.includes('资料')) handlers.seed?.()
       if (text.includes('大纲')) handlers.outline?.()
       if (text.includes('测验') || text.includes('考试')) handlers.quiz?.()
       if (text.includes('错题')) handlers.wrong?.()
@@ -34,4 +33,3 @@ export function useVoiceCommands(handlers) {
 
   return { listening, supported, transcript, start }
 }
-

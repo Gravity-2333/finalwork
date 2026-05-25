@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .database import init_db
-from .knowledge import build_knowledge, list_documents, save_upload, seed_sample_material
+from .knowledge import build_knowledge, list_documents, save_upload
+from .providers import cloud_ollama_models, test_provider
 from .workflow import (
     generate_chapter,
     generate_quiz,
@@ -20,13 +21,15 @@ from .workflow import (
 )
 
 
-Provider = Literal["local_ollama", "cloud_ollama", "deepseek", "mock"]
+Provider = Literal["local_ollama", "cloud_ollama", "openai_compatible", "mock"]
 
 
 class ProviderConfig(BaseModel):
     provider: Provider = "mock"
     model: str = ""
     base_url: str = ""
+    api_key: str = ""
+    api_key_env: str = ""
     langsmith_enabled: bool = False
 
 
@@ -75,19 +78,11 @@ async def upload_document(file: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/documents/seed")
-def seed_document() -> dict:
-    try:
-        return {"document": seed_sample_material()}
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
 @app.post("/api/outline")
 def outline(config: ProviderConfig) -> dict:
     _configure_langsmith(config)
     try:
-        return run_outline(config.provider, config.model, config.base_url)
+        return run_outline(config.provider, config.model, config.base_url, config.api_key, config.api_key_env)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -101,7 +96,7 @@ def chapters() -> dict:
 def chapter_content(chapter_id: int, config: ProviderConfig) -> dict:
     _configure_langsmith(config)
     try:
-        return generate_chapter(chapter_id, config.provider, config.model, config.base_url)
+        return generate_chapter(chapter_id, config.provider, config.model, config.base_url, config.api_key, config.api_key_env)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -110,7 +105,23 @@ def chapter_content(chapter_id: int, config: ProviderConfig) -> dict:
 def chapter_quiz(chapter_id: int, config: ProviderConfig) -> dict:
     _configure_langsmith(config)
     try:
-        return generate_quiz(chapter_id, config.provider, config.model, config.base_url)
+        return generate_quiz(chapter_id, config.provider, config.model, config.base_url, config.api_key, config.api_key_env)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/provider/test")
+def provider_test(config: ProviderConfig) -> dict:
+    try:
+        return test_provider(config.provider, config.model, config.base_url, config.api_key, config.api_key_env)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/provider/cloud-ollama/models")
+def provider_cloud_ollama_models(config: ProviderConfig) -> dict:
+    try:
+        return {"models": cloud_ollama_models(config.base_url, config.api_key, config.api_key_env)}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -149,4 +160,3 @@ def _configure_langsmith(config: ProviderConfig) -> None:
         os.environ.setdefault("LANGCHAIN_PROJECT", "AI学习助手大作业")
     else:
         os.environ["LANGCHAIN_TRACING_V2"] = "false"
-

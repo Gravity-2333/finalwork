@@ -7,7 +7,7 @@ from typing import TypedDict
 from langgraph.graph import END, StateGraph
 
 from .database import connect, decode_options, row_to_dict
-from .knowledge import all_context, search_chunks
+from .knowledge import all_context, has_documents, search_chunks
 from .providers import call_provider
 
 
@@ -17,19 +17,24 @@ class AssistantState(TypedDict, total=False):
     provider: str
     model: str
     base_url: str
+    api_key: str
+    api_key_env: str
     context: str
     prompt: str
     result: str
     warning: str
 
 
-def run_outline(provider: str, model: str = "", base_url: str = "") -> dict:
+def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "") -> dict:
+    _require_documents()
     state = _graph().invoke(
         {
             "task": "outline",
             "provider": provider,
             "model": model,
             "base_url": base_url,
+            "api_key": api_key,
+            "api_key_env": api_key_env,
         }
     )
     chapters = _parse_outline(state["result"])
@@ -44,7 +49,8 @@ def run_outline(provider: str, model: str = "", base_url: str = "") -> dict:
     return {"chapters": list_chapters(), "warning": state.get("warning", "")}
 
 
-def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: str = "") -> dict:
+def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "") -> dict:
+    _require_documents()
     state = _graph().invoke(
         {
             "task": "chapter",
@@ -52,6 +58,8 @@ def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: 
             "provider": provider,
             "model": model,
             "base_url": base_url,
+            "api_key": api_key,
+            "api_key_env": api_key_env,
         }
     )
     with connect() as conn:
@@ -59,7 +67,8 @@ def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: 
     return {"chapter": get_chapter(chapter_id), "warning": state.get("warning", "")}
 
 
-def generate_quiz(chapter_id: int, provider: str, model: str = "", base_url: str = "") -> dict:
+def generate_quiz(chapter_id: int, provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "") -> dict:
+    _require_documents()
     chapter = get_chapter(chapter_id)
     context = "\n".join(item["content"] for item in search_chunks(chapter["title"], 5))
     prompt = (
@@ -67,7 +76,7 @@ def generate_quiz(chapter_id: int, provider: str, model: str = "", base_url: str
         "输出 JSON 数组，每项包含 question/options/answer/explanation。\n"
         f"资料：{context or chapter['content']}"
     )
-    result = call_provider(provider, prompt, model, base_url)
+    result = call_provider(provider, prompt, model, base_url, api_key, api_key_env)
     questions = _parse_quiz(result.text, chapter)
     with connect() as conn:
         conn.execute("DELETE FROM quizzes WHERE chapter_id=?", (chapter_id,))
@@ -143,6 +152,11 @@ def wrong_answers() -> list[dict]:
     return [{**row_to_dict(row), "options": decode_options(row["options"])} for row in rows]
 
 
+def _require_documents() -> None:
+    if not has_documents():
+        raise ValueError("请先上传课程资料，系统需要基于知识库生成大纲和测验。")
+
+
 def _graph():
     graph = StateGraph(AssistantState)
     graph.add_node("retrieve", _retrieve)
@@ -187,6 +201,8 @@ def _generate(state: AssistantState) -> AssistantState:
         state.get("prompt", ""),
         state.get("model", ""),
         state.get("base_url", ""),
+        state.get("api_key", ""),
+        state.get("api_key_env", ""),
     )
     state["result"] = result.text
     state["warning"] = result.warning
@@ -259,4 +275,3 @@ def _parse_quiz(text: str, chapter: dict) -> list[dict]:
             "explanation": "LangChain loader 和 splitter 是知识库构建的基础。",
         },
     ]
-

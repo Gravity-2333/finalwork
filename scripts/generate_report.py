@@ -10,11 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "2300320125-杨翰飞-软件工程-23003201班-生产实习报告-模版.docx"
 OUTPUT = ROOT / "2300320125-杨翰飞-软件工程-23003201班-生产实习报告.docx"
 SCREENSHOTS = [
-    ("人脸核验、Provider 配置与学习看板", ROOT / "screenshots" / "01-login-provider-dashboard.png"),
-    ("知识库上传、大纲生成与章节工作区", ROOT / "screenshots" / "02-knowledge-outline-workspace.png"),
-    ("章节学习内容生成结果", ROOT / "screenshots" / "03-chapter-content.png"),
-    ("在线测验与错题归档", ROOT / "screenshots" / "04-quiz-wrong-answers.png"),
-    ("语音交互控制入口", ROOT / "screenshots" / "05-voice-control.png"),
+    ("人脸识别核验登录页", ROOT / "screenshots" / "01-face-login.png"),
+    ("Provider 配置与学习看板", ROOT / "screenshots" / "02-provider-dashboard.png"),
+    ("知识库上传、大纲生成与章节工作区", ROOT / "screenshots" / "03-knowledge-outline-workspace.png"),
+    ("章节学习内容生成结果", ROOT / "screenshots" / "04-chapter-content.png"),
+    ("在线测验与错题归档", ROOT / "screenshots" / "05-quiz-wrong-answers.png"),
+    ("语音交互控制入口", ROOT / "screenshots" / "06-voice-control.png"),
 ]
 
 
@@ -27,7 +28,8 @@ FILL_TEXT = {
     "task": (
         "项目任务包括：搭建 FastAPI 后端与 Vue 3 前端；使用 LangChain 完成 txt、md、docx、pdf 学习资料加载与切割；"
         "使用 SQLite 保存知识库、章节进度、测验和错题；使用 LangGraph 编排检索、提示词组织和生成流程；"
-        "实现 local_ollama、cloud_ollama、deepseek、mock 四类 Provider；将 LangSmith 设计为可选追踪功能；"
+        "实现 local_ollama、cloud_ollama、openai_compatible、mock 四类 Provider；"
+        "API Key 支持手动填写或按系统环境变量名读取；将 LangSmith 设计为可选追踪功能；"
         "最终完成运行截图和实习报告整理。"
     ),
     "reflection": (
@@ -76,8 +78,10 @@ def main() -> None:
     document.add_paragraph(
         "本系统位于 finalwork 目录，采用 FastAPI + Vue 3 前后端分离架构。"
         "后端使用 LangChain 完成课程资料加载和文本切割，使用 LangGraph 编排知识库检索、课程大纲、章节内容、测验生成和错题归档流程。"
-        "模型调用支持 local_ollama、cloud_ollama、deepseek 和 mock 四种 Provider；缺少环境变量或接口不可用时，系统会给出友好提示并自动使用 Mock 演示。"
-        "LangSmith 为可选追踪能力，默认关闭，没有 LANGSMITH_API_KEY 时不影响主流程。"
+        "模型调用支持 local_ollama、cloud_ollama、openai_compatible 和 mock 四种 Provider。"
+        "OpenAI-compatible 模式可接入 DeepSeek 等兼容接口，API Key 支持手动填写或填写系统环境变量名。"
+        "云端 Ollama 支持获取并测试可用模型后以下拉列表选择。LangSmith 为可选追踪能力，默认关闭，没有 LANGSMITH_API_KEY 时不影响主流程。"
+        "系统打开后首先进入人脸识别核验登录页，核验通过后才展示学习工作台。"
     )
     document.add_paragraph("关键运行截图如下：")
 
@@ -92,4 +96,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

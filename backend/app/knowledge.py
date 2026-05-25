@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 from pathlib import Path
 
 from docx import Document as DocxDocument
@@ -69,6 +68,12 @@ def list_documents() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def has_documents() -> bool:
+    with connect() as conn:
+        row = conn.execute("SELECT COUNT(*) AS count FROM chunks").fetchone()
+    return bool(row and row["count"])
+
+
 def search_chunks(query: str, limit: int = 8) -> list[dict]:
     terms = [item for item in re.split(r"\W+", query.lower()) if item]
     with connect() as conn:
@@ -90,23 +95,6 @@ def all_context(limit: int = 12) -> str:
     return "\n\n".join(row["content"] for row in rows)
 
 
-def seed_sample_material() -> dict:
-    sample = Path(__file__).resolve().parents[2] / "docs" / "sample_course.txt"
-    if not sample.exists():
-        sample.write_text(
-            "人工智能课程学习资料\n"
-            "第一章 人工智能概述：介绍人工智能的发展、典型应用与学习路径。\n"
-            "第二章 机器学习基础：包括监督学习、无监督学习、训练集、测试集与评估指标。\n"
-            "第三章 大语言模型应用：介绍提示词、知识库检索、智能体编排与安全使用。\n"
-            "第四章 学习复盘方法：通过章节测验、错题归档和阶段总结提升学习效果。\n",
-            encoding="utf-8",
-        )
-    target = UPLOAD_DIR / sample.name
-    if not target.exists():
-        shutil.copyfile(sample, target)
-    return build_knowledge(target)
-
-
 def _existing_document(filename: str) -> dict | None:
     with connect() as conn:
         row = conn.execute("SELECT * FROM documents WHERE filename=? ORDER BY id DESC LIMIT 1", (filename,)).fetchone()
@@ -116,14 +104,22 @@ def _existing_document(filename: str) -> dict | None:
 def _load_documents(file_path: Path) -> list[Document]:
     suffix = file_path.suffix.lower()
     if suffix in {".txt", ".md"}:
-        return TextLoader(str(file_path), encoding="utf-8").load()
+        return _clean_documents(TextLoader(str(file_path), encoding="utf-8").load())
     if suffix == ".pdf":
-        return PyPDFLoader(str(file_path)).load()
+        return _clean_documents(PyPDFLoader(str(file_path)).load())
     if suffix == ".docx":
         doc = DocxDocument(file_path)
         text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-        return [Document(page_content=text, metadata={"source": str(file_path)})]
+        return _clean_documents([Document(page_content=text, metadata={"source": str(file_path)})])
     raise ValueError("不支持的资料格式。")
+
+
+def _clean_documents(documents: list[Document]) -> list[Document]:
+    cleaned = []
+    for doc in documents:
+        text = doc.page_content.encode("utf-8", "ignore").decode("utf-8")
+        cleaned.append(Document(page_content=text, metadata=doc.metadata))
+    return cleaned
 
 
 def _summarize_chunks(chunks: list[Document]) -> str:

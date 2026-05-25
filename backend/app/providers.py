@@ -21,6 +21,9 @@ class ProviderError(RuntimeError):
     pass
 
 
+PROJECT_MODEL_HINTS = ("qwen", "deepseek", "kimi", "glm", "llama", "gpt", "mistral", "minimax", "gemini")
+
+
 def mock_generate(prompt: str) -> str:
     if "生成4个章节的学习大纲" in prompt:
         return (
@@ -52,6 +55,8 @@ def call_provider(
     prompt: str,
     model: str = "",
     base_url: str = "",
+    api_key: str = "",
+    api_key_env: str = "",
     allow_fallback: bool = True,
 ) -> ProviderResult:
     try:
@@ -61,25 +66,21 @@ def call_provider(
             text = _call_local_ollama(prompt, model or "qwen2.5:7b", base_url or "http://localhost:11434")
             return ProviderResult(text, provider)
         if provider == "cloud_ollama":
-            api_key = os.getenv("OLLAMA_API_KEY")
-            if not api_key:
-                raise ProviderError("未检测到 OLLAMA_API_KEY，无法调用云端 Ollama。")
+            resolved_key = _resolve_api_key(api_key, api_key_env or "OLLAMA_API_KEY")
             text = _call_openai_compatible(
                 prompt,
-                model or "qwen2.5:7b",
-                base_url or "http://localhost:11434/v1",
-                api_key,
+                model or "qwen3-coder-next",
+                _normalize_openai_base_url(base_url or "https://ollama.com/v1"),
+                resolved_key,
             )
             return ProviderResult(text, provider)
-        if provider == "deepseek":
-            api_key = os.getenv("DEEPSEEK_API_KEY")
-            if not api_key:
-                raise ProviderError("未检测到 DEEPSEEK_API_KEY，无法调用 DeepSeek API。")
+        if provider == "openai_compatible":
+            resolved_key = _resolve_api_key(api_key, api_key_env)
             text = _call_openai_compatible(
                 prompt,
                 model or "deepseek-chat",
-                base_url or "https://api.deepseek.com/v1",
-                api_key,
+                _normalize_openai_base_url(base_url),
+                resolved_key,
             )
             return ProviderResult(text, provider)
         raise ProviderError(f"不支持的模型来源：{provider}")
@@ -92,6 +93,52 @@ def call_provider(
             used_fallback=True,
             warning=f"{provider} 调用失败，已切换 Mock 演示：{exc}",
         )
+
+
+def test_provider(
+    provider: str,
+    model: str = "",
+    base_url: str = "",
+    api_key: str = "",
+    api_key_env: str = "",
+) -> dict:
+    result = call_provider(
+        provider,
+        "请只回复 OK，用于测试模型连接。",
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
+        api_key_env=api_key_env,
+        allow_fallback=False,
+    )
+    return {"ok": True, "provider": result.provider, "message": result.text[:120]}
+
+
+def cloud_ollama_models(
+    base_url: str = "",
+    api_key: str = "",
+    api_key_env: str = "",
+    probe_limit: int = 8,
+) -> list[dict]:
+    resolved_key = _resolve_api_key(api_key, api_key_env or "OLLAMA_API_KEY")
+    root = _normalize_openai_base_url(base_url or "https://ollama.com/v1").rstrip("/")
+    response = requests.get(
+        f"{root}/models",
+        headers={"Authorization": f"Bearer {resolved_key}"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    raw_models = response.json().get("data", [])
+    names = [item.get("id", "") for item in raw_models if item.get("id")]
+    candidates = _rank_project_models(names)
+    usable = []
+    for name in candidates[: max(probe_limit, 1)]:
+        try:
+            result = _call_openai_compatible("请只回复 OK", name, root, resolved_key, timeout=35, max_tokens=8)
+            usable.append({"id": name, "name": name, "tested": True, "message": result[:80]})
+        except Exception:
+            continue
+    return usable
 
 
 def _call_local_ollama(prompt: str, model: str, base_url: str) -> str:
@@ -113,7 +160,14 @@ def _call_local_ollama(prompt: str, model: str, base_url: str) -> str:
     return data.get("message", {}).get("content", "").strip() or "本地 Ollama 返回为空。"
 
 
-def _call_openai_compatible(prompt: str, model: str, base_url: str, api_key: str) -> str:
+def _call_openai_compatible(
+    prompt: str,
+    model: str,
+    base_url: str,
+    api_key: str,
+    timeout: int = 60,
+    max_tokens: int = 800,
+) -> str:
     url = f"{base_url.rstrip('/')}/chat/completions"
     response = requests.post(
         url,
@@ -125,9 +179,41 @@ def _call_openai_compatible(prompt: str, model: str, base_url: str, api_key: str
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.4,
+            "max_tokens": max_tokens,
         },
-        timeout=60,
+        timeout=timeout,
     )
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"].strip()
+
+
+def _resolve_api_key(api_key: str = "", api_key_env: str = "") -> str:
+    if api_key.strip():
+        return api_key.strip()
+    if api_key_env.strip():
+        value = os.getenv(api_key_env.strip())
+        if value:
+            return value
+        raise ProviderError(f"未检测到环境变量 {api_key_env.strip()}，请手动填写 API Key 或检查系统环境变量。")
+    raise ProviderError("请填写 API Key，或填写保存 API Key 的系统环境变量名。")
+
+
+def _normalize_openai_base_url(base_url: str) -> str:
+    cleaned = (base_url or "").strip().rstrip("/")
+    if not cleaned:
+        raise ProviderError("请填写 OpenAI-compatible base_url。")
+    if cleaned.endswith("/api"):
+        return cleaned[:-4] + "/v1"
+    return cleaned
+
+
+def _rank_project_models(names: list[str]) -> list[str]:
+    def score(name: str) -> tuple[int, str]:
+        lowered = name.lower()
+        bad = any(token in lowered for token in ("embed", "image", "vision", "audio", "whisper", "tts"))
+        hint = any(token in lowered for token in PROJECT_MODEL_HINTS)
+        coder_penalty = 1 if "coder" in lowered else 0
+        return (10 if bad else 0, 0 if hint else 1, coder_penalty, name)
+
+    return sorted(names, key=score)

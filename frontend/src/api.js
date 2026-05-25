@@ -17,10 +17,6 @@ export function listDocuments() {
   return request('/documents')
 }
 
-export function seedDocument() {
-  return request('/documents/seed', { method: 'POST' })
-}
-
 export function uploadDocument(file) {
   const form = new FormData()
   form.append('file', file)
@@ -67,10 +63,25 @@ export function listWrongAnswers() {
   return request('/wrong-answers')
 }
 
+export function testProvider(config) {
+  return request('/provider/test', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(config)
+  })
+}
+
+export function listCloudOllamaModels(config) {
+  return request('/provider/cloud-ollama/models', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(config)
+  })
+}
+
 export function faceLogin() {
   const form = new FormData()
   form.append('name', '杨翰飞')
   form.append('demo', 'true')
   return request('/face-login', { method: 'POST', body: form })
 }
-

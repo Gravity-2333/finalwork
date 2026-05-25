@@ -1,35 +1,31 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import {
-  Bot,
-  BrainCircuit,
-  CheckCircle2,
-  FileUp,
-  Mic,
-  Play,
-  RefreshCw,
-  ScanFace,
-  ShieldAlert,
-  Sparkles,
-  Trophy
-} from 'lucide-vue-next'
+import DashboardMetrics from './components/DashboardMetrics.vue'
+import FaceGate from './components/FaceGate.vue'
+import HeroHeader from './components/HeroHeader.vue'
+import KnowledgePanel from './components/KnowledgePanel.vue'
+import ProviderPanel from './components/ProviderPanel.vue'
+import QuizPanel from './components/QuizPanel.vue'
+import StudyPanel from './components/StudyPanel.vue'
 import {
   createChapterContent,
   createOutline,
   createQuiz,
   faceLogin,
   health,
+  listCloudOllamaModels,
+  listChapters,
   listDocuments,
   listWrongAnswers,
-  seedDocument,
   submitQuiz,
+  testProvider,
   uploadDocument
 } from './api'
 import { useVoiceCommands } from './useVoice'
 
 const status = reactive({
   loading: false,
-  message: '系统已就绪，可先载入示例资料或上传课程资料。',
+  message: '系统已就绪，请先上传课程资料。',
   warning: ''
 })
 
@@ -37,6 +33,9 @@ const config = reactive({
   provider: 'mock',
   model: '',
   base_url: '',
+  key_mode: 'env',
+  api_key: '',
+  api_key_env: '',
   langsmith_enabled: false
 })
 
@@ -53,32 +52,35 @@ const quizzes = ref([])
 const answers = reactive({})
 const result = ref(null)
 const wrongs = ref([])
-const face = reactive({
-  ok: false,
-  message: '请完成人脸核验后进入学习工作台。',
-  cameraReady: 'mediaDevices' in navigator
-})
+const cloudModels = ref([])
+const cloudLoading = ref(false)
+const testMessage = ref('')
+const face = reactive({ ok: false })
 
 const providerDefaults = {
   mock: {
     model: 'mock-assistant',
-    base_url: '本地演示，无需地址',
-    hint: 'Mock Provider 可离线演示完整学习流程。'
+    base_url: '',
+    api_key_env: '',
+    hint: 'Mock Provider 离线演示，不需要 API Key。'
   },
   local_ollama: {
     model: 'qwen2.5:7b',
     base_url: 'http://localhost:11434',
-    hint: '本地 Ollama 默认连接 http://localhost:11434，无需 API Key。'
+    api_key_env: '',
+    hint: '本地 Ollama 使用 /api/chat，默认地址 http://localhost:11434。'
   },
   cloud_ollama: {
-    model: 'qwen2.5:7b',
-    base_url: 'https://your-ollama.example.com/v1',
-    hint: '云端 Ollama 使用 OpenAI-compatible 接口，API Key 从 OLLAMA_API_KEY 读取。'
+    model: 'qwen3-coder-next',
+    base_url: 'https://ollama.com/v1',
+    api_key_env: 'OLLAMA_API_KEY',
+    hint: '云端 Ollama 会拉取并测试可用模型，API Key 可手填或读取 OLLAMA_API_KEY。'
   },
-  deepseek: {
+  openai_compatible: {
     model: 'deepseek-chat',
     base_url: 'https://api.deepseek.com/v1',
-    hint: 'DeepSeek API Key 从 DEEPSEEK_API_KEY 读取。'
+    api_key_env: 'DEEPSEEK_API_KEY',
+    hint: '通用 OpenAI-compatible 模式，可用于 DeepSeek 等兼容接口。'
   }
 }
 
@@ -96,17 +98,11 @@ const progress = computed(() => {
   if (!chapters.value.length) return 0
   return Math.round(chapters.value.reduce((sum, item) => sum + item.progress, 0) / chapters.value.length)
 })
-
-const providerHint = computed(() => {
-  if (config.provider === 'deepseek' && !env.deepseek_key_ready) return '未检测到 DEEPSEEK_API_KEY，调用时会自动使用 Mock fallback。'
-  if (config.provider === 'cloud_ollama' && !env.ollama_key_ready) return '未检测到 OLLAMA_API_KEY，云端 Ollama 将友好降级。'
-  return providerDefaults[config.provider].hint
-})
+const providerHint = computed(() => providerDefaults[config.provider].hint)
 const modelPlaceholder = computed(() => providerDefaults[config.provider].model)
-const baseUrlPlaceholder = computed(() => providerDefaults[config.provider].base_url)
+const baseUrlPlaceholder = computed(() => providerDefaults[config.provider].base_url || '无需填写')
 
 const { listening, supported, transcript, start } = useVoiceCommands({
-  seed: loadSample,
   outline: generateOutline,
   quiz: generateQuizForSelected,
   wrong: loadWrongs,
@@ -120,22 +116,25 @@ onMounted(async () => {
   applyProviderDefaults()
   await refreshHealth()
   await refreshDocuments()
+  await refreshChapters()
   await loadWrongs()
   const params = new URLSearchParams(window.location.search)
-  if (params.get('demo') === '1') {
-    await demoFlow()
-  }
+  if (params.get('demo') === '1') await demoFlow()
 })
 
 watch(
   () => config.provider,
-  () => applyProviderDefaults()
+  () => {
+    applyProviderDefaults()
+    testMessage.value = ''
+  }
 )
 
 async function runTask(message, task) {
   status.loading = true
   status.message = message
   status.warning = ''
+  testMessage.value = ''
   try {
     const data = await task()
     if (data?.warning) status.warning = data.warning
@@ -158,11 +157,16 @@ async function refreshDocuments() {
   documents.value = data.documents
 }
 
+async function refreshChapters() {
+  const data = await listChapters().catch(() => ({ chapters: [] }))
+  chapters.value = data.chapters
+  selectedChapterId.value = chapters.value[0]?.id || null
+}
+
 async function verifyFace() {
   const data = await runTask('正在进行人脸核验...', faceLogin)
   if (data?.ok) {
     face.ok = true
-    face.message = data.message
     status.message = '人脸核验通过，可以开始学习。'
   }
 }
@@ -177,16 +181,8 @@ async function handleUpload(event) {
   }
 }
 
-async function loadSample() {
-  const data = await runTask('正在载入示例课程资料...', seedDocument)
-  if (data) {
-    status.message = `示例资料已就绪，共 ${data.document.chunk_count} 个片段。`
-    await refreshDocuments()
-  }
-}
-
 async function generateOutline() {
-  const data = await runTask('正在通过 LangGraph 生成课程大纲...', () => createOutline(config))
+  const data = await runTask('正在通过 LangGraph 生成课程大纲...', () => createOutline(providerPayload()))
   if (data) {
     chapters.value = data.chapters
     selectedChapterId.value = chapters.value[0]?.id || null
@@ -195,7 +191,9 @@ async function generateOutline() {
 }
 
 async function generateContent(chapter) {
-  const data = await runTask(`正在生成《${chapter.title}》学习内容...`, () => createChapterContent(chapter.id, config))
+  const data = await runTask(`正在生成《${chapter.title}》学习内容...`, () =>
+    createChapterContent(chapter.id, providerPayload())
+  )
   if (data) {
     const index = chapters.value.findIndex((item) => item.id === chapter.id)
     chapters.value[index] = data.chapter
@@ -206,7 +204,7 @@ async function generateContent(chapter) {
 
 async function generateQuizForSelected() {
   if (!selectedChapter.value) return
-  const data = await runTask('正在生成在线测验...', () => createQuiz(selectedChapter.value.id, config))
+  const data = await runTask('正在生成在线测验...', () => createQuiz(selectedChapter.value.id, providerPayload()))
   if (data) {
     quizzes.value = data.quizzes
     result.value = null
@@ -232,194 +230,123 @@ async function loadWrongs() {
   wrongs.value = data.wrong_answers
 }
 
+async function runProviderTest() {
+  const data = await runTask('正在测试模型连接...', () => testProvider(providerPayload()))
+  if (data?.ok) {
+    testMessage.value = `连接成功：${data.provider} / ${data.message || 'OK'}`
+    status.message = '模型连接测试通过。'
+  }
+}
+
+async function loadCloudModels() {
+  if (!navigator.onLine) {
+    status.warning = '当前浏览器显示网络离线，无法获取云端 Ollama 模型列表。'
+    testMessage.value = ''
+    return
+  }
+  cloudLoading.value = true
+  try {
+    const data = await runTask('正在获取并测试云端 Ollama 模型...', () => listCloudOllamaModels(providerPayload()))
+    if (data?.models?.length) {
+      cloudModels.value = data.models
+      config.model = data.models[0].id
+      status.message = `已获取 ${data.models.length} 个可用云端 Ollama 模型。`
+    } else if (data) {
+      status.warning = '云端 Ollama 暂无已测试可用的项目模型，请检查账号权限或更换 API Key。'
+    }
+  } finally {
+    cloudLoading.value = false
+  }
+}
+
 async function demoFlow() {
   await verifyFace()
-  if (!documents.value.length) await loadSample()
-  await generateOutline()
-  if (selectedChapter.value) await generateContent(selectedChapter.value)
-  await generateQuizForSelected()
+  if (uniqueDocuments.value.length) {
+    await generateOutline()
+    if (selectedChapter.value) await generateContent(selectedChapter.value)
+    await generateQuizForSelected()
+  }
+}
+
+function providerPayload() {
+  return {
+    provider: config.provider,
+    model: config.model,
+    base_url: config.base_url,
+    api_key: config.key_mode === 'manual' ? config.api_key : '',
+    api_key_env: config.key_mode === 'env' ? config.api_key_env : '',
+    langsmith_enabled: config.langsmith_enabled
+  }
 }
 
 function applyProviderDefaults() {
   const defaults = providerDefaults[config.provider]
   const knownModels = Object.values(providerDefaults).map((item) => item.model)
   const knownBaseUrls = Object.values(providerDefaults).map((item) => item.base_url)
-  if (!config.model || knownModels.includes(config.model)) {
-    config.model = defaults.model
-  }
-  if (!config.base_url || knownBaseUrls.includes(config.base_url)) {
-    config.base_url = defaults.base_url
-  }
+  const knownKeyEnvs = Object.values(providerDefaults).map((item) => item.api_key_env)
+  if (!config.model || knownModels.includes(config.model)) config.model = defaults.model
+  if (!config.base_url || knownBaseUrls.includes(config.base_url)) config.base_url = defaults.base_url
+  if (!config.api_key_env || knownKeyEnvs.includes(config.api_key_env)) config.api_key_env = defaults.api_key_env
+  if (config.provider === 'mock' || config.provider === 'local_ollama') config.api_key = ''
 }
 </script>
 
 <template>
-  <main class="app-shell">
-    <section class="hero">
-      <div class="hero-copy">
-        <div class="eyebrow"><BrainCircuit :size="17" /> LangChain · LangGraph · 可选 LangSmith</div>
-        <h1>AI 学习助手</h1>
-        <p>把课程资料转成可学习、可测验、可复盘的个人知识库。</p>
-      </div>
-      <div class="hero-actions">
-        <button :class="['face-button', { verified: face.ok }]" :disabled="status.loading" @click="verifyFace">
-          <ScanFace :size="18" /> {{ face.ok ? '已核验' : '人脸核验' }}
-        </button>
-        <button :class="{ active: listening }" :disabled="!supported" @click="start">
-          <Mic :size="18" /> 语音控制
-        </button>
-      </div>
-    </section>
+  <FaceGate v-if="!face.ok" :loading="status.loading" :message="status.warning || status.message" @verify="verifyFace" />
+  <main v-else class="app-shell">
+    <HeroHeader
+      :face-ok="face.ok"
+      :loading="status.loading"
+      :listening="listening"
+      :supported="supported"
+      @verify="verifyFace"
+      @voice="start"
+    />
 
-    <section class="provider-panel">
-      <div class="runtime-state">
-        <span :class="['state-dot', face.ok ? 'ok' : '']"></span>
-        <strong>{{ face.ok ? '已登录' : '待核验' }}</strong>
-        <small>{{ status.message }}</small>
-      </div>
-      <div class="provider-fields">
-        <label>
-          <span>模型来源</span>
-          <select v-model="config.provider">
-            <option value="mock">Mock</option>
-            <option value="local_ollama">本地 Ollama</option>
-            <option value="cloud_ollama">云端 Ollama</option>
-            <option value="deepseek">DeepSeek</option>
-          </select>
-        </label>
-        <label>
-          <span>模型</span>
-          <input v-model="config.model" :placeholder="modelPlaceholder" />
-        </label>
-        <label>
-          <span>地址</span>
-          <input v-model="config.base_url" :placeholder="baseUrlPlaceholder" />
-        </label>
-        <label class="toggle">
-          <input v-model="config.langsmith_enabled" type="checkbox" />
-          追踪
-        </label>
-      </div>
-      <p :class="{ warning: status.warning }">
-        <ShieldAlert v-if="status.warning" :size="16" />
-        <Bot v-else :size="16" />
-        {{ status.warning || providerHint }}
-      </p>
-    </section>
+    <ProviderPanel
+      :config="config"
+      :status="status"
+      :face-ok="face.ok"
+      :provider-hint="providerHint"
+      :model-placeholder="modelPlaceholder"
+      :base-url-placeholder="baseUrlPlaceholder"
+      :cloud-models="cloudModels"
+      :cloud-loading="cloudLoading"
+      :test-message="testMessage"
+      @test="runProviderTest"
+      @load-cloud-models="loadCloudModels"
+    />
 
-    <section class="dashboard">
-      <div class="metric">
-        <strong>{{ uniqueDocuments.length }}</strong>
-        <span>知识库资料</span>
-      </div>
-      <div class="metric">
-        <strong>{{ chapters.length }}</strong>
-        <span>学习章节</span>
-      </div>
-      <div class="metric">
-        <strong>{{ progress }}%</strong>
-        <span>整体进度</span>
-      </div>
-      <div class="metric">
-        <strong>{{ wrongs.length }}</strong>
-        <span>错题归档</span>
-      </div>
-    </section>
+    <DashboardMetrics
+      :document-count="uniqueDocuments.length"
+      :chapter-count="chapters.length"
+      :progress="progress"
+      :wrong-count="wrongs.length"
+    />
 
     <section class="workspace">
-      <aside class="side-panel">
-        <div class="panel-title">
-          <FileUp :size="19" />
-          <h2>资料与知识库</h2>
-        </div>
-        <label class="upload-box">
-          <input type="file" accept=".txt,.md,.docx,.pdf" @change="handleUpload" />
-          <span>上传课程资料</span>
-          <small>支持 txt / md / docx / pdf</small>
-        </label>
-        <button class="ghost" @click="loadSample"><Sparkles :size="17" /> 载入示例资料</button>
-        <div class="doc-list">
-          <article v-for="doc in uniqueDocuments" :key="doc.id">
-            <strong>{{ doc.filename }}</strong>
-            <span>{{ doc.chunk_count }} 个切片 · 已入库</span>
-          </article>
-          <p v-if="!uniqueDocuments.length" class="empty">暂无资料，先上传或载入示例。</p>
-        </div>
-      </aside>
-
-      <section class="main-panel">
-        <div class="toolbar">
-          <button class="primary" :disabled="status.loading" @click="generateOutline">
-            <RefreshCw :size="17" /> 生成课程大纲
-          </button>
-          <button :disabled="!selectedChapter" @click="generateQuizForSelected">
-            <Play :size="17" /> 开始测验
-          </button>
-          <button @click="loadWrongs"><Trophy :size="17" /> 查看错题</button>
-        </div>
-
-        <div class="chapter-grid">
-          <article
-            v-for="chapter in chapters"
-            :key="chapter.id"
-            :class="['chapter-card', { selected: chapter.id === selectedChapterId }]"
-            @click="selectedChapterId = chapter.id"
-          >
-            <div>
-              <h3>{{ chapter.title }}</h3>
-              <p>{{ chapter.objective }}</p>
-            </div>
-            <div class="progress-line"><span :style="{ width: `${chapter.progress}%` }"></span></div>
-            <button @click.stop="generateContent(chapter)">生成学习内容</button>
-          </article>
-        </div>
-
-        <div v-if="!chapters.length" class="empty-state">
-          <BrainCircuit :size="34" />
-          <h2>从知识库生成学习路径</h2>
-          <p>载入资料后点击“生成课程大纲”，系统会创建章节、学习目标和后续测验入口。</p>
-          <button class="primary" @click="generateOutline"><RefreshCw :size="17" /> 生成课程大纲</button>
-        </div>
-
-        <article v-if="selectedChapter" class="content-panel">
-          <h2>{{ selectedChapter.title }}</h2>
-          <p class="objective">{{ selectedChapter.objective }}</p>
-          <pre>{{ selectedChapter.content || '点击“生成学习内容”，系统将结合知识库生成本章学习材料。' }}</pre>
-        </article>
-      </section>
-
-      <aside class="quiz-panel">
-        <div class="panel-title">
-          <Trophy :size="19" />
-          <h2>测验与错题</h2>
-        </div>
-        <div v-if="quizzes.length" class="quiz-list">
-          <article v-for="quiz in quizzes" :key="quiz.id">
-            <h3>{{ quiz.question }}</h3>
-            <label v-for="option in quiz.options" :key="option">
-              <input v-model="answers[quiz.id]" type="radio" :name="`quiz-${quiz.id}`" :value="option" />
-              {{ option }}
-            </label>
-          </article>
-          <button class="primary" @click="submitCurrentQuiz">提交测验</button>
-          <p v-if="result" class="score">得分 {{ result.score }} / {{ result.total }}</p>
-        </div>
-        <p v-else class="empty">选择章节后点击“开始测验”。</p>
-
-        <div class="wrong-list">
-          <h3>错题归档</h3>
-          <article v-for="item in visibleWrongs" :key="item.id">
-            <strong>{{ item.chapter_title }}</strong>
-            <p>{{ item.question }}</p>
-            <small>你的答案：{{ item.selected || '未选择' }}；正确答案：{{ item.answer }}</small>
-          </article>
-          <p v-if="!wrongs.length" class="empty">暂无错题，完成测验后自动记录。</p>
-        </div>
-      </aside>
+      <KnowledgePanel :documents="uniqueDocuments" @upload="handleUpload" />
+      <StudyPanel
+        :chapters="chapters"
+        :selected-chapter="selectedChapter"
+        :selected-chapter-id="selectedChapterId"
+        :loading="status.loading"
+        @outline="generateOutline"
+        @select="selectedChapterId = $event"
+        @content="generateContent"
+        @quiz="generateQuizForSelected"
+        @wrong="loadWrongs"
+      />
+      <QuizPanel
+        :quizzes="quizzes"
+        :answers="answers"
+        :result="result"
+        :wrongs="visibleWrongs"
+        @submit="submitCurrentQuiz"
+      />
     </section>
 
     <section class="voice-strip">
-      <Mic :size="18" />
       <span>语音识别：{{ transcript }}</span>
       <small>可说“生成大纲”“开始测验”“查看错题”“切换 mock 模型”。</small>
     </section>
