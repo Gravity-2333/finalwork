@@ -2,7 +2,8 @@
 import { FileUp, Trash2 } from 'lucide-vue-next'
 
 defineProps({
-  documents: { type: Array, default: () => [] }
+  documents: { type: Array, default: () => [] },
+  loading: Boolean
 })
 
 const emit = defineEmits(['upload', 'delete', 'clear'])
@@ -17,12 +18,12 @@ function onUpload(event) {
     <div class="panel-title">
       <FileUp :size="19" />
       <h2>资料与知识库</h2>
-      <button class="icon-action" :disabled="!documents.length" title="清空资料库" @click="$emit('clear')">
+      <button class="icon-action" :disabled="loading || !documents.length" title="清空资料库" @click="$emit('clear')">
         <Trash2 :size="16" />
       </button>
     </div>
     <label class="upload-box">
-      <input type="file" multiple accept=".txt,.md,.docx,.pdf" @change="onUpload" />
+      <input type="file" multiple accept=".txt,.md,.docx,.pdf" :disabled="loading" @change="onUpload" />
       <span>批量上传课程资料</span>
       <small>支持 txt / md / docx / pdf，单个文件不超过 25MB</small>
     </label>
@@ -32,7 +33,7 @@ function onUpload(event) {
           <strong>{{ doc.filename }}</strong>
           <span>{{ doc.chunk_count }} 个切片 · 已入库</span>
         </div>
-        <button class="icon-action danger" title="删除该资料" @click="$emit('delete', doc)">
+        <button class="icon-action danger" :disabled="loading" title="删除该资料" @click="$emit('delete', doc)">
           <Trash2 :size="15" />
         </button>
       </article>

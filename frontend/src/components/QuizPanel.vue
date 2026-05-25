@@ -1,14 +1,18 @@
 <script setup>
+import { computed } from 'vue'
 import { Trophy } from 'lucide-vue-next'
 
-defineProps({
+const props = defineProps({
   quizzes: { type: Array, default: () => [] },
   answers: { type: Object, required: true },
   result: { type: Object, default: null },
-  wrongs: { type: Array, default: () => [] }
+  wrongs: { type: Array, default: () => [] },
+  loading: Boolean
 })
 
 defineEmits(['submit'])
+
+const answeredAll = computed(() => props.quizzes.length > 0 && props.quizzes.every((quiz) => props.answers[quiz.id]))
 </script>
 
 <template>
@@ -25,7 +29,7 @@ defineEmits(['submit'])
           {{ option }}
         </label>
       </article>
-      <button class="primary" @click="$emit('submit')">提交测验</button>
+      <button class="primary" :disabled="loading || !answeredAll" @click="$emit('submit')">提交测验</button>
       <p v-if="result" class="score">得分 {{ result.score }} / {{ result.total }}</p>
     </div>
     <p v-else class="empty">选择章节后点击“开始测验”。</p>
@@ -41,4 +45,3 @@ defineEmits(['submit'])
     </div>
   </aside>
 </template>
-

@@ -17,10 +17,10 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
       <button class="primary" :disabled="loading" @click="$emit('outline')">
         <RefreshCw :size="17" /> 生成课程大纲
       </button>
-      <button :disabled="!selectedChapter" @click="$emit('quiz')">
+      <button :disabled="loading || !selectedChapter" @click="$emit('quiz')">
         <Play :size="17" /> 开始测验
       </button>
-      <button @click="$emit('wrong')"><Trophy :size="17" /> 查看错题</button>
+      <button :disabled="loading" @click="$emit('wrong')"><Trophy :size="17" /> 查看错题</button>
     </div>
 
     <div class="chapter-grid">
@@ -35,7 +35,7 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
           <p>{{ chapter.objective }}</p>
         </div>
         <div class="progress-line"><span :style="{ width: `${chapter.progress}%` }"></span></div>
-        <button @click.stop="$emit('content', chapter)">生成学习内容</button>
+        <button :disabled="loading" @click.stop="$emit('content', chapter)">生成学习内容</button>
       </article>
     </div>
 
@@ -43,7 +43,7 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
       <BrainCircuit :size="34" />
       <h2>从知识库生成学习路径</h2>
       <p>上传资料后点击“生成课程大纲”，系统会创建章节、学习目标和后续测验入口。</p>
-      <button class="primary" @click="$emit('outline')"><RefreshCw :size="17" /> 生成课程大纲</button>
+      <button class="primary" :disabled="loading" @click="$emit('outline')"><RefreshCw :size="17" /> 生成课程大纲</button>
     </div>
 
     <article v-if="selectedChapter" class="content-panel">
@@ -53,4 +53,3 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
     </article>
   </section>
 </template>
-

@@ -17,7 +17,8 @@ export function useVoiceCommands(handlers) {
     volumeText: '未测试',
     lastText: '',
     matchedCommand: '',
-    diagnostic: supported ? '点击开始语音识别或麦克风测试。' : '浏览器不支持 Web Speech API。'
+    diagnostic: supported ? '点击开始语音识别或麦克风测试。' : '浏览器不支持 Web Speech API。',
+    testingMicrophone: false
   })
 
   let recognition = null
@@ -26,6 +27,7 @@ export function useVoiceCommands(handlers) {
   let audioContext = null
   let audioStream = null
   let audioTimer = null
+  let audioStopTimer = null
 
   function start() {
     if (!supported) return
@@ -107,12 +109,18 @@ export function useVoiceCommands(handlers) {
   }
 
   async function testMicrophone() {
+    if (voiceStatus.testingMicrophone) {
+      voiceStatus.diagnostic = '麦克风测试正在进行。'
+      return
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
       voiceStatus.permission = '不可用'
       voiceStatus.diagnostic = '当前环境不支持麦克风访问。'
       return
     }
     try {
+      stopMicrophoneTest()
+      voiceStatus.testingMicrophone = true
       audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
       voiceStatus.permission = '已授权'
       const AudioContextClass = window.AudioContext || window.webkitAudioContext
@@ -131,8 +139,9 @@ export function useVoiceCommands(handlers) {
         voiceStatus.volumeText = volume < 8 ? '音量偏低' : volume < 25 ? '音量正常' : '音量清晰'
         voiceStatus.diagnostic = volume < 8 ? '麦克风已授权，但声音偏小或没有输入。' : '麦克风有输入，若仍无法识别，多半是语音识别服务或环境问题。'
       }, 180)
-      setTimeout(stopMicrophoneTest, 8000)
+      audioStopTimer = setTimeout(stopMicrophoneTest, 8000)
     } catch {
+      voiceStatus.testingMicrophone = false
       voiceStatus.permission = '未授权'
       voiceStatus.volumeText = '无法测试'
       voiceStatus.diagnostic = '未获得麦克风权限，请检查浏览器权限或系统输入设备。'
@@ -140,9 +149,12 @@ export function useVoiceCommands(handlers) {
   }
 
   function stopMicrophoneTest() {
+    if (audioStopTimer) clearTimeout(audioStopTimer)
     if (audioTimer) clearInterval(audioTimer)
     if (audioStream) audioStream.getTracks().forEach((track) => track.stop())
-    if (audioContext) audioContext.close()
+    if (audioContext?.state !== 'closed') audioContext.close().catch?.(() => {})
+    voiceStatus.testingMicrophone = false
+    audioStopTimer = null
     audioTimer = null
     audioStream = null
     audioContext = null

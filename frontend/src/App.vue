@@ -137,8 +137,6 @@ onMounted(async () => {
   await refreshDocuments()
   await refreshChapters()
   await loadWrongs()
-  const params = new URLSearchParams(window.location.search)
-  if (params.get('demo') === '1') await demoFlow()
 })
 
 watch(
@@ -367,15 +365,6 @@ async function loadCloudModels() {
   }
 }
 
-async function demoFlow() {
-  await verifyFace()
-  if (uniqueDocuments.value.length) {
-    await generateOutline()
-    if (selectedChapter.value) await generateContent(selectedChapter.value)
-    await generateQuizForSelected()
-  }
-}
-
 function providerPayload() {
   return {
     provider: config.provider,
@@ -449,6 +438,7 @@ function applyProviderDefaults() {
       <KnowledgePanel
         v-if="activeView === 'library'"
         :documents="uniqueDocuments"
+        :loading="status.loading"
         @upload="handleUpload"
         @delete="removeDocument"
         @clear="removeAllDocuments"
@@ -471,6 +461,7 @@ function applyProviderDefaults() {
         :answers="answers"
         :result="result"
         :wrongs="visibleWrongs"
+        :loading="status.loading"
         @submit="submitCurrentQuiz"
       />
       <section v-if="activeView === 'voice'" class="voice-page">
@@ -486,8 +477,8 @@ function applyProviderDefaults() {
           <button class="primary" :class="{ active: listening }" :disabled="!supported" @click="start">
             <Mic :size="17" /> {{ listening ? '停止并处理语音' : '开始语音识别' }}
           </button>
-          <button @click="testMicrophone">麦克风测试</button>
-          <button @click="stopMicrophoneTest">停止测试</button>
+          <button :disabled="voiceStatus.testingMicrophone" @click="testMicrophone">麦克风测试</button>
+          <button :disabled="!voiceStatus.testingMicrophone" @click="stopMicrophoneTest">停止测试</button>
         </div>
         <div class="voice-diagnostics">
           <article>

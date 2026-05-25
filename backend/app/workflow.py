@@ -98,6 +98,8 @@ def generate_quiz(chapter_id: int, provider: str, model: str = "", base_url: str
 
 def submit_quiz(chapter_id: int, answers: dict[str, str]) -> dict:
     quizzes = list_quizzes(chapter_id)
+    if not quizzes:
+        raise ValueError("当前章节暂无测验，请先生成测验题目。")
     score = 0
     details = []
     with connect() as conn:
