@@ -29,6 +29,14 @@ export function uploadDocuments(files) {
   return request('/documents/upload-batch', { method: 'POST', body: form })
 }
 
+export function deleteDocument(id) {
+  return request(`/documents/${id}`, { method: 'DELETE' })
+}
+
+export function clearDocuments() {
+  return request('/documents', { method: 'DELETE' })
+}
+
 export function createOutline(config) {
   return request('/outline', {
     method: 'POST',

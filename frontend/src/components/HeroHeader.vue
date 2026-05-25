@@ -8,7 +8,7 @@ defineProps({
   supported: Boolean
 })
 
-defineEmits(['verify', 'voice'])
+defineEmits(['manage-face', 'voice'])
 </script>
 
 <template>
@@ -19,8 +19,8 @@ defineEmits(['verify', 'voice'])
       <p>把课程资料转成可学习、可测验、可复盘的个人知识库。</p>
     </div>
     <div class="hero-actions">
-      <button :class="['face-button', { verified: faceOk }]" :disabled="loading" @click="$emit('verify')">
-        <ScanFace :size="18" /> {{ faceOk ? '已核验' : '人脸核验' }}
+      <button :class="['face-button', { verified: faceOk }]" :disabled="loading" @click="$emit('manage-face')">
+        <ScanFace :size="18" /> {{ faceOk ? '重录人脸' : '人脸核验' }}
       </button>
       <button :class="{ active: listening }" :disabled="!supported" @click="$emit('voice')">
         <Mic :size="18" /> {{ listening ? '停止语音' : '语音控制' }}

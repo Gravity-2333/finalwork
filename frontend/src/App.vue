@@ -12,6 +12,8 @@ import {
   createChapterContent,
   createOutline,
   createQuiz,
+  clearDocuments,
+  deleteDocument,
   faceEnroll,
   faceLogin,
   faceProfile,
@@ -61,6 +63,8 @@ const testMessage = ref('')
 const activeView = ref('library')
 const face = reactive({ ok: false })
 const faceProfileState = reactive({ enrolled: false, username: '杨翰飞' })
+const faceManageOpen = ref(false)
+const faceReplaceToken = ref('')
 const maxUploadBytes = 25 * 1024 * 1024
 
 const providerDefaults = {
@@ -184,11 +188,14 @@ async function refreshFaceProfile(username = faceProfileState.username) {
 }
 
 async function enrollFace(payload) {
-  const data = await runTask('正在录入授权人脸模板...', () => faceEnroll(payload))
+  const data = await runTask('正在录入授权人脸模板...', () =>
+    faceEnroll({ ...payload, allow_replace: face.ok, replace_token: face.ok ? faceReplaceToken.value : '' })
+  )
   if (data?.ok) {
     faceProfileState.enrolled = true
     faceProfileState.username = data.username
-    status.message = '授权人脸已录入，请点击人脸识别登录。'
+    faceManageOpen.value = false
+    status.message = face.ok ? '授权人脸已重新录入，后续登录将使用新模板。' : '授权人脸已录入，请点击人脸识别登录。'
   }
 }
 
@@ -197,6 +204,7 @@ async function verifyFace(payload) {
   if (data?.ok) {
     face.ok = true
     faceProfileState.username = data.username
+    faceReplaceToken.value = data.replace_token || ''
     status.message = Object.prototype.hasOwnProperty.call(data, 'distance')
       ? `人脸识别通过，距离 ${data.distance} / 阈值 ${data.threshold}，可以开始学习。`
       : `人脸识别通过，相似度 ${data.similarity}，可以开始学习。`
@@ -221,6 +229,33 @@ async function handleUpload(event) {
     status.warning = errors.length ? `部分文件未入库：${errors.map((item) => `${item.filename} ${item.message}`).join('；')}` : ''
     await refreshDocuments()
     if (documents.length) activeView.value = 'study'
+  }
+}
+
+async function removeDocument(doc) {
+  const data = await runTask(`正在删除 ${doc.filename}...`, () => deleteDocument(doc.id))
+  if (data?.ok) {
+    status.message = data.message
+    await refreshDocuments()
+    await refreshChapters()
+    await loadWrongs()
+    quizzes.value = []
+    result.value = null
+    activeView.value = 'library'
+  }
+}
+
+async function removeAllDocuments() {
+  const data = await runTask('正在清空资料库...', clearDocuments)
+  if (data?.ok) {
+    status.message = data.message
+    documents.value = []
+    chapters.value = []
+    selectedChapterId.value = null
+    quizzes.value = []
+    result.value = null
+    wrongs.value = []
+    activeView.value = 'library'
   }
 }
 
@@ -338,12 +373,14 @@ function applyProviderDefaults() {
 
 <template>
   <FaceGate
-    v-if="!face.ok"
+    v-if="!face.ok || faceManageOpen"
     :loading="status.loading"
     :message="status.warning || status.message"
     :enrolled="faceProfileState.enrolled"
+    :allow-reenroll="face.ok"
     @verify="verifyFace"
     @enroll="enrollFace"
+    @cancel="faceManageOpen = false"
   />
   <main v-else class="app-shell">
     <HeroHeader
@@ -351,7 +388,7 @@ function applyProviderDefaults() {
       :loading="status.loading"
       :listening="listening"
       :supported="supported"
-      @verify="verifyFace"
+      @manage-face="faceManageOpen = true"
       @voice="start"
     />
 
@@ -377,7 +414,13 @@ function applyProviderDefaults() {
     </nav>
 
     <section class="content-frame">
-      <KnowledgePanel v-if="activeView === 'library'" :documents="uniqueDocuments" @upload="handleUpload" />
+      <KnowledgePanel
+        v-if="activeView === 'library'"
+        :documents="uniqueDocuments"
+        @upload="handleUpload"
+        @delete="removeDocument"
+        @clear="removeAllDocuments"
+      />
       <StudyPanel
         v-if="activeView === 'study'"
         :chapters="chapters"

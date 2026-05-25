@@ -65,6 +65,31 @@ def list_documents() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def delete_document(document_id: int) -> dict:
+    with connect() as conn:
+        row = conn.execute("SELECT * FROM documents WHERE id=?", (document_id,)).fetchone()
+        if not row:
+            raise ValueError("资料不存在或已被删除。")
+        document = dict(row)
+        conn.execute("DELETE FROM chunks WHERE document_id=?", (document_id,))
+        conn.execute("DELETE FROM documents WHERE id=?", (document_id,))
+        _clear_learning_state(conn)
+    _unlink_if_unused(document["file_path"], document["filename"])
+    return document
+
+
+def clear_documents() -> int:
+    with connect() as conn:
+        rows = conn.execute("SELECT * FROM documents").fetchall()
+        documents = [dict(row) for row in rows]
+        conn.execute("DELETE FROM chunks")
+        conn.execute("DELETE FROM documents")
+        _clear_learning_state(conn)
+    for document in documents:
+        _unlink_if_unused(document["file_path"], document["filename"], assume_database_cleared=True)
+    return len(documents)
+
+
 def has_documents() -> bool:
     with connect() as conn:
         row = conn.execute("SELECT COUNT(*) AS count FROM chunks").fetchone()
@@ -123,3 +148,18 @@ def _summarize_chunks(chunks: list[Document]) -> str:
     text = "\n".join(chunk.page_content for chunk in chunks[:3])
     text = re.sub(r"\s+", " ", text).strip()
     return text[:220] or "资料已加载，等待生成课程大纲。"
+
+
+def _clear_learning_state(conn) -> None:
+    conn.execute("DELETE FROM wrong_answers")
+    conn.execute("DELETE FROM quizzes")
+    conn.execute("DELETE FROM chapters")
+
+
+def _unlink_if_unused(file_path: str, filename: str, assume_database_cleared: bool = False) -> None:
+    target = Path(file_path)
+    if not target.exists() or target.parent != UPLOAD_DIR:
+        return
+    if not assume_database_cleared and _existing_document(filename):
+        return
+    target.unlink(missing_ok=True)

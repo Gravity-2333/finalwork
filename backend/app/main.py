@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .database import init_db
 from .face_auth import enroll_face, has_profile, verify_face
-from .knowledge import build_knowledge, list_documents, save_upload
+from .knowledge import build_knowledge, clear_documents, delete_document, list_documents, save_upload
 from .providers import cloud_ollama_models, test_provider
 from .workflow import (
     generate_chapter,
@@ -44,6 +44,8 @@ class SubmitPayload(BaseModel):
 class FacePayload(BaseModel):
     username: str = "杨翰飞"
     descriptor: list[float]
+    allow_replace: bool = False
+    replace_token: str = ""
 
 
 app = FastAPI(title="AI 学习助手", version="1.0.0")
@@ -103,6 +105,21 @@ async def upload_documents(files: list[UploadFile] = File(...)) -> dict:
     if not documents and errors:
         raise HTTPException(status_code=400, detail="；".join(f"{item['filename']}：{item['message']}" for item in errors))
     return {"documents": documents, "errors": errors}
+
+
+@app.delete("/api/documents/{document_id}")
+def remove_document(document_id: int) -> dict:
+    try:
+        document = delete_document(document_id)
+        return {"ok": True, "document": document, "message": "资料已删除，学习大纲与测验记录已同步清理。"}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/documents")
+def remove_documents() -> dict:
+    count = clear_documents()
+    return {"ok": True, "count": count, "message": "资料库已清空，学习大纲与测验记录已同步清理。"}
 
 
 async def _read_upload(file: UploadFile) -> bytes:
@@ -189,7 +206,7 @@ def face_profile(username: str = "杨翰飞") -> dict:
 @app.post("/api/face/enroll")
 def face_enroll(payload: FacePayload) -> dict:
     try:
-        return enroll_face(payload.username, payload.descriptor)
+        return enroll_face(payload.username, payload.descriptor, payload.allow_replace, payload.replace_token)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

@@ -5,10 +5,11 @@ import { Camera, LogIn, ScanFace, ShieldCheck, UserPlus } from 'lucide-vue-next'
 const props = defineProps({
   loading: Boolean,
   message: { type: String, default: '' },
-  enrolled: Boolean
+  enrolled: Boolean,
+  allowReenroll: Boolean
 })
 
-const emit = defineEmits(['verify', 'enroll'])
+const emit = defineEmits(['verify', 'enroll', 'cancel'])
 const video = ref(null)
 const username = ref('杨翰飞')
 const cameraMessage = ref('请开启摄像头采集账号本人面部。')
@@ -59,7 +60,7 @@ async function loadModels() {
 }
 
 function enroll() {
-  if (props.enrolled) {
+  if (props.enrolled && !props.allowReenroll) {
     cameraMessage.value = '该账号已录入授权人脸，未登录状态下不能覆盖模板。'
     return
   }
@@ -111,12 +112,12 @@ onBeforeUnmount(() => {
       <div class="login-copy">
         <div class="eyebrow"><ShieldCheck :size="17" /> 人脸安全登录</div>
         <h1>AI 学习助手</h1>
-        <p>首次使用需录入账号本人脸部模板；之后登录必须通过当前摄像头人脸比对。</p>
+        <p>{{ allowReenroll ? '重新采集账号本人脸部模板，保存后后续登录将使用新模板。' : '首次使用需录入账号本人脸部模板；之后登录必须通过当前摄像头人脸比对。' }}</p>
         <label class="account-field">
           <span>账号</span>
           <input v-model="username" placeholder="请输入账号姓名" />
         </label>
-        <p class="enroll-state">{{ enrolled ? '该账号已录入授权人脸，请直接核验登录。' : '该账号尚未录入授权人脸，请先录入。' }}</p>
+        <p class="enroll-state">{{ enrolled ? (allowReenroll ? '已登录，可重新录入授权人脸。' : '该账号已录入授权人脸，请直接核验登录。') : '该账号尚未录入授权人脸，请先录入。' }}</p>
       </div>
 
       <div class="camera-panel">
@@ -129,11 +130,14 @@ onBeforeUnmount(() => {
 
       <div class="login-actions">
         <button @click="startCamera"><Camera :size="18" /> 开启摄像头</button>
-        <button :disabled="loading || enrolled || !descriptor" @click="enroll">
-          <UserPlus :size="18" /> 录入人脸
+        <button :disabled="loading || (enrolled && !allowReenroll) || !descriptor" @click="enroll">
+          <UserPlus :size="18" /> {{ allowReenroll ? '保存新模板' : '录入人脸' }}
         </button>
-        <button class="primary" :disabled="loading || !enrolled || !descriptor" @click="verify">
+        <button v-if="!allowReenroll" class="primary" :disabled="loading || !enrolled || !descriptor" @click="verify">
           <LogIn :size="18" /> 人脸识别登录
+        </button>
+        <button v-else class="primary" @click="$emit('cancel')">
+          返回工作台
         </button>
       </div>
       <p class="login-tip">{{ message || cameraMessage }}</p>
