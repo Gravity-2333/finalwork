@@ -21,11 +21,8 @@ def save_upload(file_name: str, content: bytes) -> Path:
         raise ValueError("仅支持 txt、md、docx、pdf 格式资料。")
     safe_name = re.sub(r"[^\w.\-\u4e00-\u9fff]+", "_", Path(file_name).name)
     target = UPLOAD_DIR / safe_name
-    counter = 1
-    while target.exists():
-        target = UPLOAD_DIR / f"{target.stem}_{counter}{suffix}"
-        counter += 1
-    target.write_bytes(content)
+    if not target.exists():
+        target.write_bytes(content)
     return target
 
 

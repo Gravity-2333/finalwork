@@ -23,9 +23,8 @@ defineEmits(['verify', 'voice'])
         <ScanFace :size="18" /> {{ faceOk ? '已核验' : '人脸核验' }}
       </button>
       <button :class="{ active: listening }" :disabled="!supported" @click="$emit('voice')">
-        <Mic :size="18" /> 语音控制
+        <Mic :size="18" /> {{ listening ? '停止语音' : '语音控制' }}
       </button>
     </div>
   </section>
 </template>
-

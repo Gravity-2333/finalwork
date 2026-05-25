@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { BookOpen, FolderOpen, MessageCircle, Mic, Settings, Trophy } from 'lucide-vue-next'
 import DashboardMetrics from './components/DashboardMetrics.vue'
 import FaceGate from './components/FaceGate.vue'
 import HeroHeader from './components/HeroHeader.vue'
@@ -55,6 +56,7 @@ const wrongs = ref([])
 const cloudModels = ref([])
 const cloudLoading = ref(false)
 const testMessage = ref('')
+const activeView = ref('library')
 const face = reactive({ ok: false })
 
 const providerDefaults = {
@@ -94,6 +96,13 @@ const uniqueDocuments = computed(() => {
   })
 })
 const visibleWrongs = computed(() => wrongs.value.slice(0, 3))
+const navItems = [
+  { id: 'library', label: '知识库', icon: FolderOpen },
+  { id: 'study', label: '学习路径', icon: BookOpen },
+  { id: 'quiz', label: '测验复盘', icon: Trophy },
+  { id: 'voice', label: '语音助手', icon: Mic },
+  { id: 'settings', label: '模型设置', icon: Settings }
+]
 const progress = computed(() => {
   if (!chapters.value.length) return 0
   return Math.round(chapters.value.reduce((sum, item) => sum + item.progress, 0) / chapters.value.length)
@@ -178,6 +187,7 @@ async function handleUpload(event) {
   if (data) {
     status.message = `已构建知识库：${data.document.filename}，共 ${data.document.chunk_count} 个片段。`
     await refreshDocuments()
+    activeView.value = 'study'
   }
 }
 
@@ -187,6 +197,7 @@ async function generateOutline() {
     chapters.value = data.chapters
     selectedChapterId.value = chapters.value[0]?.id || null
     status.message = '课程大纲已生成，可继续生成章节学习内容。'
+    activeView.value = 'study'
   }
 }
 
@@ -210,6 +221,7 @@ async function generateQuizForSelected() {
     result.value = null
     Object.keys(answers).forEach((key) => delete answers[key])
     status.message = '测验已生成，请完成作答。'
+    activeView.value = 'quiz'
   }
 }
 
@@ -303,19 +315,13 @@ function applyProviderDefaults() {
       @voice="start"
     />
 
-    <ProviderPanel
-      :config="config"
-      :status="status"
-      :face-ok="face.ok"
-      :provider-hint="providerHint"
-      :model-placeholder="modelPlaceholder"
-      :base-url-placeholder="baseUrlPlaceholder"
-      :cloud-models="cloudModels"
-      :cloud-loading="cloudLoading"
-      :test-message="testMessage"
-      @test="runProviderTest"
-      @load-cloud-models="loadCloudModels"
-    />
+    <section class="app-status">
+      <div>
+        <strong>{{ status.warning ? '需要处理' : '运行状态' }}</strong>
+        <span :class="{ warning: status.warning }">{{ status.warning || status.message }}</span>
+      </div>
+      <button @click="activeView = 'settings'"><Settings :size="16" /> 模型设置</button>
+    </section>
 
     <DashboardMetrics
       :document-count="uniqueDocuments.length"
@@ -324,9 +330,16 @@ function applyProviderDefaults() {
       :wrong-count="wrongs.length"
     />
 
-    <section class="workspace">
-      <KnowledgePanel :documents="uniqueDocuments" @upload="handleUpload" />
+    <nav class="app-nav" aria-label="功能导航">
+      <button v-for="item in navItems" :key="item.id" :class="{ selected: activeView === item.id }" @click="activeView = item.id">
+        <component :is="item.icon" :size="17" /> {{ item.label }}
+      </button>
+    </nav>
+
+    <section class="content-frame">
+      <KnowledgePanel v-if="activeView === 'library'" :documents="uniqueDocuments" @upload="handleUpload" />
       <StudyPanel
+        v-if="activeView === 'study'"
         :chapters="chapters"
         :selected-chapter="selectedChapter"
         :selected-chapter-id="selectedChapterId"
@@ -335,20 +348,48 @@ function applyProviderDefaults() {
         @select="selectedChapterId = $event"
         @content="generateContent"
         @quiz="generateQuizForSelected"
-        @wrong="loadWrongs"
+        @wrong="activeView = 'quiz'"
       />
       <QuizPanel
+        v-if="activeView === 'quiz'"
         :quizzes="quizzes"
         :answers="answers"
         :result="result"
         :wrongs="visibleWrongs"
         @submit="submitCurrentQuiz"
       />
-    </section>
-
-    <section class="voice-strip">
-      <span>语音识别：{{ transcript }}</span>
-      <small>可说“生成大纲”“开始测验”“查看错题”“切换 mock 模型”。</small>
+      <section v-if="activeView === 'voice'" class="voice-page">
+        <div class="panel-title">
+          <MessageCircle :size="20" />
+          <h2>语音助手</h2>
+        </div>
+        <p>{{ transcript }}</p>
+        <div class="voice-actions">
+          <button class="primary" :class="{ active: listening }" :disabled="!supported" @click="start">
+            <Mic :size="17" /> {{ listening ? '停止语音识别' : '开始语音识别' }}
+          </button>
+        </div>
+        <div class="command-grid">
+          <span>生成大纲</span>
+          <span>开始测验</span>
+          <span>查看错题</span>
+          <span>切换 mock 模型</span>
+        </div>
+      </section>
+      <ProviderPanel
+        v-if="activeView === 'settings'"
+        :config="config"
+        :status="status"
+        :face-ok="face.ok"
+        :provider-hint="providerHint"
+        :model-placeholder="modelPlaceholder"
+        :base-url-placeholder="baseUrlPlaceholder"
+        :cloud-models="cloudModels"
+        :cloud-loading="cloudLoading"
+        :test-message="testMessage"
+        @test="runProviderTest"
+        @load-cloud-models="loadCloudModels"
+      />
     </section>
   </main>
 </template>

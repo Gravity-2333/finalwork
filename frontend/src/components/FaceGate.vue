@@ -11,7 +11,10 @@ const emit = defineEmits(['verify'])
 const video = ref(null)
 const cameraMessage = ref('请开启摄像头完成人脸核验。')
 const cameraReady = ref(false)
+const faceDetected = ref(false)
+const detectorSupported = 'FaceDetector' in window
 let stream = null
+let detectTimer = null
 
 async function startCamera() {
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -22,19 +25,35 @@ async function startCamera() {
     stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
     video.value.srcObject = stream
     cameraReady.value = true
-    cameraMessage.value = '摄像头已开启，请保持面部在画面中央。'
+    cameraMessage.value = detectorSupported ? '正在检测人脸，请保持面部在画面中央。' : '摄像头已开启，当前浏览器不支持原生人脸检测，可使用演示核验。'
+    if (detectorSupported) startDetection()
   } catch {
     cameraMessage.value = '摄像头未授权或不可用，可使用演示核验。'
   }
 }
 
 function verify() {
-  emit('verify', { cameraReady: cameraReady.value })
+  emit('verify', { cameraReady: cameraReady.value, faceDetected: faceDetected.value, detectorSupported })
 }
 
 onBeforeUnmount(() => {
   if (stream) stream.getTracks().forEach((track) => track.stop())
+  if (detectTimer) clearInterval(detectTimer)
 })
+
+function startDetection() {
+  const detector = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 })
+  detectTimer = setInterval(async () => {
+    if (!video.value || video.value.readyState < 2) return
+    try {
+      const faces = await detector.detect(video.value)
+      faceDetected.value = faces.length > 0
+      cameraMessage.value = faceDetected.value ? '已检测到人脸，可以登录。' : '未检测到人脸，请正对摄像头。'
+    } catch {
+      cameraMessage.value = '人脸检测不可用，可使用演示核验。'
+    }
+  }, 900)
+}
 </script>
 
 <template>
@@ -48,7 +67,7 @@ onBeforeUnmount(() => {
 
       <div class="camera-panel">
         <video ref="video" autoplay muted playsinline></video>
-        <div v-if="!cameraReady" class="camera-placeholder">
+        <div v-if="!cameraReady || !faceDetected" class="camera-placeholder">
           <ScanFace :size="42" />
           <span>{{ cameraMessage }}</span>
         </div>
@@ -56,12 +75,11 @@ onBeforeUnmount(() => {
 
       <div class="login-actions">
         <button @click="startCamera"><Camera :size="18" /> 开启摄像头</button>
-        <button class="primary" :disabled="loading" @click="verify">
-          <LogIn :size="18" /> 人脸核验登录
+        <button class="primary" :disabled="loading || (detectorSupported && !faceDetected)" @click="verify">
+          <LogIn :size="18" /> {{ detectorSupported ? '人脸核验登录' : '演示核验登录' }}
         </button>
       </div>
       <p class="login-tip">{{ message || cameraMessage }}</p>
     </section>
   </main>
 </template>
-

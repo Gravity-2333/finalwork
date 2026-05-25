@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { chromium } from 'playwright-core'
 
@@ -20,6 +20,17 @@ const executablePath = browserCandidates.find((item) => existsSync(item))
 
 if (!executablePath) {
   throw new Error('未找到 Chrome 或 Edge 浏览器，无法自动截图。')
+}
+
+function resetDemoData() {
+  rmSync(resolve(root, 'data', 'assistant.db'), { force: true })
+  const uploadDir = resolve(root, 'uploads')
+  if (!existsSync(uploadDir)) return
+  for (const file of readdirSync(uploadDir)) {
+    if (file !== '.gitkeep') {
+      rmSync(resolve(uploadDir, file), { force: true })
+    }
+  }
 }
 
 function run(command, args, cwd) {
@@ -68,6 +79,8 @@ async function uploadTestMaterial() {
   }
 }
 
+resetDemoData()
+
 const backend = run(python, ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'], resolve(root, 'backend'))
 const frontend =
   process.platform === 'win32'
@@ -90,15 +103,19 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } })
   await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' })
   await page.screenshot({ path: resolve(screenshotDir, '01-face-login.png'), fullPage: false })
-  await page.getByRole('button', { name: /人脸核验登录/ }).click()
-  await page.waitForSelector('.workspace')
+  await page.locator('.login-actions .primary').click()
+  await page.waitForSelector('.app-nav')
+  await page.locator('.app-nav button').nth(4).click()
   await page.screenshot({ path: resolve(screenshotDir, '02-provider-dashboard.png'), fullPage: false })
-  await page.locator('.workspace').screenshot({ path: resolve(screenshotDir, '03-knowledge-outline-workspace.png') })
+  await page.locator('.app-nav button').nth(0).click()
+  await page.locator('.content-frame').screenshot({ path: resolve(screenshotDir, '03-knowledge-outline-workspace.png') })
+  await page.locator('.app-nav button').nth(1).click()
   await page.locator('.content-panel').screenshot({ path: resolve(screenshotDir, '04-chapter-content.png') })
-  await page.getByRole('button', { name: /开始测验/ }).click()
+  await page.locator('.toolbar button').nth(1).click()
   await page.waitForSelector('.quiz-list')
-  await page.locator('.quiz-panel').screenshot({ path: resolve(screenshotDir, '05-quiz-wrong-answers.png') })
-  await page.locator('.voice-strip').screenshot({ path: resolve(screenshotDir, '06-voice-control.png') })
+  await page.locator('.content-frame').screenshot({ path: resolve(screenshotDir, '05-quiz-wrong-answers.png') })
+  await page.locator('.app-nav button').nth(3).click()
+  await page.locator('.voice-page').screenshot({ path: resolve(screenshotDir, '06-voice-control.png') })
   await browser.close()
   console.log(`Screenshots saved to ${screenshotDir}`)
 } finally {

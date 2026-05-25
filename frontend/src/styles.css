@@ -152,12 +152,12 @@ button:disabled {
 }
 
 .hero {
-  min-height: 210px;
+  min-height: 150px;
   display: flex;
   justify-content: space-between;
   gap: 24px;
   align-items: flex-end;
-  padding: 34px 38px;
+  padding: 24px 30px;
   border-radius: 8px;
   background:
     linear-gradient(105deg, rgba(22, 95, 201, 0.96) 0%, rgba(28, 116, 186, 0.82) 42%, rgba(0, 126, 110, 0.94) 100%),
@@ -191,8 +191,8 @@ button:disabled {
 }
 
 h1 {
-  margin: 16px 0 8px;
-  font-size: clamp(38px, 4.4vw, 56px);
+  margin: 12px 0 8px;
+  font-size: clamp(34px, 4vw, 48px);
   letter-spacing: 0;
   line-height: 1;
 }
@@ -228,16 +228,36 @@ h1 {
   color: #007a63;
 }
 
-.provider-panel,
 .dashboard,
-.workspace,
-.voice-strip {
+.app-status,
+.app-nav,
+.content-frame {
   margin-top: 14px;
+}
+
+.app-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid #dbe4f0;
+  border-radius: 8px;
+}
+
+.app-status div {
+  display: grid;
+  gap: 2px;
+}
+
+.app-status span {
+  color: #64748b;
 }
 
 .provider-panel {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   gap: 14px 18px;
   padding: 16px;
   background: #fff;
@@ -329,6 +349,23 @@ h1 {
   gap: 14px;
 }
 
+.app-nav {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.app-nav button {
+  min-height: 42px;
+  background: #fff;
+}
+
+.app-nav button.selected {
+  background: #1f6fe5;
+  border-color: #1f6fe5;
+  color: #fff;
+}
+
 .metric {
   padding: 18px 20px;
   background: #fff;
@@ -350,17 +387,17 @@ h1 {
   color: #637089;
 }
 
-.workspace {
-  display: grid;
-  grid-template-columns: 300px minmax(560px, 1fr) 330px;
-  gap: 14px;
-  align-items: start;
+.content-frame {
+  min-height: 330px;
+  max-height: calc(100vh - 250px);
+  overflow: hidden;
 }
 
 .side-panel,
 .main-panel,
 .quiz-panel,
-.content-panel {
+.content-panel,
+.voice-page {
   background: #fff;
   border: 1px solid #dbe4f0;
   border-radius: 8px;
@@ -369,10 +406,21 @@ h1 {
 }
 
 .side-panel,
-.quiz-panel {
-  max-height: calc(100vh - 390px);
-  min-height: 300px;
+.quiz-panel,
+.main-panel,
+.voice-page,
+.content-frame > .provider-panel {
+  height: 100%;
+  min-height: 330px;
+  max-height: calc(100vh - 250px);
   overflow: auto;
+}
+
+.content-frame > .provider-panel {
+  height: auto;
+  min-height: 260px;
+  max-height: none;
+  overflow: visible;
 }
 
 .panel-title h2,
@@ -416,6 +464,10 @@ h1 {
   margin-top: 14px;
 }
 
+.content-frame .doc-list {
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+
 .doc-list article,
 .chapter-card,
 .quiz-list article,
@@ -430,6 +482,7 @@ h1 {
 .wrong-list strong {
   display: block;
   color: #173b72;
+  overflow-wrap: anywhere;
 }
 
 .doc-list span {
@@ -451,7 +504,7 @@ h1 {
 }
 
 .chapter-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .chapter-card {
@@ -510,6 +563,8 @@ h1 {
 
 .content-panel {
   margin-top: 14px;
+  max-height: 320px;
+  overflow: auto;
 }
 
 .objective {
@@ -537,13 +592,34 @@ pre {
   color: #00856f;
 }
 
-.voice-strip {
-  padding: 12px 14px;
-  border: 1px solid #dbe4f0;
+.voice-page {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.voice-page p {
+  margin: 0;
+  color: #52637a;
+}
+
+.voice-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.command-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.command-grid span {
+  padding: 12px;
+  border: 1px solid #dbe5f0;
   border-radius: 8px;
-  background: #fff;
-  color: #4b5c73;
-  box-shadow: 0 8px 22px rgba(32, 58, 94, 0.04);
+  background: #fbfcfe;
+  color: #173b72;
 }
 
 @media (max-width: 1180px) {
@@ -559,7 +635,8 @@ pre {
   .provider-panel,
   .provider-fields,
   .dashboard,
-  .chapter-grid {
+  .chapter-grid,
+  .app-nav {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -573,13 +650,23 @@ pre {
   .provider-panel,
   .provider-fields,
   .dashboard,
-  .chapter-grid {
+  .chapter-grid,
+  .app-nav {
     display: grid;
     grid-template-columns: 1fr;
   }
 
   .hero {
     padding: 24px;
+  }
+
+  .content-frame,
+  .side-panel,
+  .quiz-panel,
+  .main-panel,
+  .voice-page,
+  .content-frame > .provider-panel {
+    max-height: none;
   }
 
   .login-card {
