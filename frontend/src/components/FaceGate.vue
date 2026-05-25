@@ -15,29 +15,46 @@ const cameraMessage = ref('请开启摄像头采集账号本人面部。')
 const cameraReady = ref(false)
 const faceDetected = ref(false)
 const descriptor = ref(null)
-const detectorSupported = 'FaceDetector' in window
+const modelsLoaded = ref(false)
 let stream = null
 let detectTimer = null
-let detector = null
+let loadingModels = false
+let modelPromise = null
+let faceapi = null
 
 async function startCamera() {
-  if (!detectorSupported) {
-    cameraMessage.value = '当前浏览器不支持 FaceDetector，无法进行真实人脸识别。请使用 Chrome/Edge 新版本。'
-    return
-  }
   if (!navigator.mediaDevices?.getUserMedia) {
     cameraMessage.value = '当前环境无法访问摄像头，不能进行人脸识别登录。'
     return
   }
   try {
+    await loadModels()
     stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
     video.value.srcObject = stream
-    detector = new window.FaceDetector({ fastMode: false, maxDetectedFaces: 1 })
     cameraReady.value = true
-    cameraMessage.value = '正在检测人脸，请保持面部在画面中央。'
+    cameraMessage.value = '正在进行人脸检测与特征提取，请保持面部在画面中央。'
     startDetection()
   } catch {
-    cameraMessage.value = '摄像头未授权或不可用，无法完成安全登录。'
+    cameraMessage.value = '摄像头未授权、模型加载失败或设备不可用，无法完成安全登录。'
+  }
+}
+
+async function loadModels() {
+  if (modelsLoaded.value) return
+  if (loadingModels && modelPromise) return modelPromise
+  loadingModels = true
+  cameraMessage.value = '正在加载人脸识别模型，请稍候。'
+  if (!faceapi) faceapi = await import('face-api.js')
+  modelPromise = Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+    faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
+    faceapi.nets.faceRecognitionNet.loadFromUri('/models')
+  ])
+  try {
+    await modelPromise
+    modelsLoaded.value = true
+  } finally {
+    loadingModels = false
   }
 }
 
@@ -62,43 +79,20 @@ function startDetection() {
   detectTimer = setInterval(async () => {
     if (!video.value || video.value.readyState < 2) return
     try {
-      const faces = await detector.detect(video.value)
+      const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.55 })
+      const faces = await faceapi.detectAllFaces(video.value, options).withFaceLandmarks().withFaceDescriptors()
       faceDetected.value = faces.length === 1
       if (!faceDetected.value) {
         descriptor.value = null
         cameraMessage.value = faces.length > 1 ? '检测到多张人脸，请仅保留账号本人。' : '未检测到人脸，请正对摄像头。'
         return
       }
-      descriptor.value = extractDescriptor(video.value, faces[0].boundingBox)
-      cameraMessage.value = '已采集到人脸特征，可录入或登录。'
+      descriptor.value = Array.from(faces[0].descriptor).map((item) => Number(item.toFixed(6)))
+      cameraMessage.value = '已完成活体画面中的人脸检测与特征提取，可录入或登录。'
     } catch {
       cameraMessage.value = '人脸检测失败，请调整光线或重新开启摄像头。'
     }
   }, 900)
-}
-
-function extractDescriptor(source, box) {
-  const canvas = document.createElement('canvas')
-  const size = 32
-  canvas.width = size
-  canvas.height = size
-  const context = canvas.getContext('2d', { willReadFrequently: true })
-  const padX = box.width * 0.18
-  const padY = box.height * 0.24
-  const sx = Math.max(0, box.x - padX)
-  const sy = Math.max(0, box.y - padY)
-  const sw = Math.min(source.videoWidth - sx, box.width + padX * 2)
-  const sh = Math.min(source.videoHeight - sy, box.height + padY * 2)
-  context.drawImage(source, sx, sy, sw, sh, 0, 0, size, size)
-  const data = context.getImageData(0, 0, size, size).data
-  const values = []
-  for (let index = 0; index < data.length; index += 4) {
-    values.push((data[index] * 0.299 + data[index + 1] * 0.587 + data[index + 2] * 0.114) / 255)
-  }
-  const mean = values.reduce((sum, item) => sum + item, 0) / values.length
-  const variance = values.reduce((sum, item) => sum + (item - mean) ** 2, 0) / values.length
-  const std = Math.sqrt(variance) || 1
-  return values.map((item) => Number(((item - mean) / std).toFixed(6)))
 }
 
 onBeforeUnmount(() => {
@@ -142,4 +136,3 @@ onBeforeUnmount(() => {
     </section>
   </main>
 </template>
-

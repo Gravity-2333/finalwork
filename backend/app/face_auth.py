@@ -7,6 +7,7 @@ from .database import connect
 
 
 DEFAULT_THRESHOLD = 0.86
+SUPPORTED_DESCRIPTOR_LENGTHS = {128, 1024}
 
 
 def has_profile(username: str) -> bool:
@@ -39,6 +40,8 @@ def verify_face(username: str, descriptor: list[float]) -> dict:
     if not row:
         raise ValueError("当前账号尚未录入授权人脸，请先完成人脸录入。")
     enrolled = json.loads(row["descriptor"])
+    if len(enrolled) != len(probe):
+        raise ValueError("人脸模板版本已更新，请重新录入账号本人脸部模板后再登录。")
     similarity = _cosine_similarity(enrolled, probe)
     threshold = float(row["threshold"])
     if similarity < threshold:
@@ -59,7 +62,7 @@ def verify_face(username: str, descriptor: list[float]) -> dict:
 
 
 def _validate_descriptor(descriptor: list[float]) -> list[float]:
-    if len(descriptor) != 1024:
+    if len(descriptor) not in SUPPORTED_DESCRIPTOR_LENGTHS:
         raise ValueError("人脸特征长度异常，请重新采集。")
     clean = [float(item) for item in descriptor]
     if not all(math.isfinite(item) for item in clean):
@@ -74,4 +77,3 @@ def _cosine_similarity(left: list[float], right: list[float]) -> float:
     if left_norm == 0 or right_norm == 0:
         return 0.0
     return dot / (left_norm * right_norm)
-
