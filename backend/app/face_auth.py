@@ -17,12 +17,6 @@ SUPPORTED_DESCRIPTOR_LENGTHS = {FACE_DESCRIPTOR_LENGTH, COMPOSITE_DESCRIPTOR_LEN
 FACE_SESSIONS: dict[str, str] = {}
 
 
-def has_profile(username: str) -> bool:
-    with connect() as conn:
-        row = conn.execute("SELECT username FROM face_profiles WHERE username=?", (username,)).fetchone()
-    return row is not None
-
-
 def profile_info(username: str) -> dict:
     with connect() as conn:
         row = conn.execute("SELECT descriptor, updated_at FROM face_profiles WHERE username=?", (username,)).fetchone()
@@ -43,7 +37,7 @@ def enroll_face(username: str, descriptor: list[float], allow_replace: bool = Fa
     with connect() as conn:
         existing = conn.execute("SELECT descriptor FROM face_profiles WHERE username=?", (username,)).fetchone()
         existing_length = len(json.loads(existing["descriptor"])) if existing else 0
-        upgrading_template = existing_length and existing_length != len(clean)
+        upgrading_template = existing_length and existing_length != COMPOSITE_DESCRIPTOR_LENGTH and len(clean) == COMPOSITE_DESCRIPTOR_LENGTH
         if existing and not upgrading_template and existing_length in {FACE_DESCRIPTOR_LENGTH, COMPOSITE_DESCRIPTOR_LENGTH} and not _can_replace(username, allow_replace, replace_token):
             raise ValueError("该账号已录入授权人脸，未登录状态下不能覆盖人脸模板。")
         conn.execute(

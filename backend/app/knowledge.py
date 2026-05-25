@@ -21,8 +21,11 @@ def save_upload(file_name: str, content: bytes) -> Path:
         raise ValueError("仅支持 txt、md、docx、pdf 格式资料。")
     safe_name = re.sub(r"[^\w.\-\u4e00-\u9fff]+", "_", Path(file_name).name)
     target = UPLOAD_DIR / safe_name
-    if not target.exists():
-        target.write_bytes(content)
+    if target.exists():
+        if target.read_bytes() == content:
+            return target
+        target = _next_available_path(target)
+    target.write_bytes(content)
     return target
 
 
@@ -121,6 +124,14 @@ def _existing_document(filename: str) -> dict | None:
     with connect() as conn:
         row = conn.execute("SELECT * FROM documents WHERE filename=? ORDER BY id DESC LIMIT 1", (filename,)).fetchone()
     return dict(row) if row else None
+
+
+def _next_available_path(target: Path) -> Path:
+    for index in range(1, 1000):
+        candidate = target.with_name(f"{target.stem}_{index}{target.suffix}")
+        if not candidate.exists():
+            return candidate
+    raise ValueError("同名资料过多，请重命名文件后再上传。")
 
 
 def _load_documents(file_path: Path) -> list[Document]:
