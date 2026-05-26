@@ -2,8 +2,9 @@ import { execFileSync, spawn } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { chromium } from 'playwright-core'
 
+process.env.PLAYWRIGHT_BROWSERS_PATH ||= 'E:\\缓存\\playwright'
+const { chromium } = await import('playwright')
 const root = resolve('.')
 const screenshotDir = resolve(root, 'screenshots')
 const dataDb = resolve(root, 'data', 'assistant.db')
@@ -14,17 +15,6 @@ const venvPython = resolve(root, '.venv', 'Scripts', 'python.exe')
 const python = existsSync(venvPython)
   ? venvPython
   : 'python'
-
-const browserCandidates = [
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
-]
-const executablePath = browserCandidates.find((item) => existsSync(item))
-
-if (!executablePath) {
-  throw new Error('未找到 Chrome 或 Edge 浏览器，无法自动截图。')
-}
 
 function cleanUploads() {
   if (!existsSync(uploadDir)) return
@@ -173,7 +163,7 @@ try {
   const answers = Object.fromEntries(quiz.quizzes.map((item) => [String(item.id), item.options[1] || '']))
   await post(`http://127.0.0.1:8000/api/chapters/${chapter.id}/submit`, { answers })
 
-  const browser = await chromium.launch({ executablePath, headless: true })
+  const browser = await chromium.launch({ headless: true })
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } })
   await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' })
   await page.screenshot({ path: resolve(screenshotDir, '01-face-login.png'), fullPage: false })

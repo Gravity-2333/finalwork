@@ -7,7 +7,7 @@
     "screenshots": "node scripts/capture-screenshots.mjs",
     "report": "node scripts/run-report.mjs"
   },
-  "dependencies": {
-    "playwright-core": "^1.49.1"
+  "devDependencies": {
+    "playwright": "^1.60.0"
   }
 }
