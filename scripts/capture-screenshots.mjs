@@ -1,10 +1,14 @@
-import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { chromium } from 'playwright-core'
 
 const root = resolve('.')
 const screenshotDir = resolve(root, 'screenshots')
+const dataDb = resolve(root, 'data', 'assistant.db')
+const uploadDir = resolve(root, 'uploads')
+const backupRoot = mkdtempSync(resolve(tmpdir(), 'ai-study-screenshots-'))
 mkdirSync(screenshotDir, { recursive: true })
 const venvPython = resolve(root, '.venv', 'Scripts', 'python.exe')
 const python = existsSync(venvPython)
@@ -22,9 +26,7 @@ if (!executablePath) {
   throw new Error('未找到 Chrome 或 Edge 浏览器，无法自动截图。')
 }
 
-function resetDemoData() {
-  rmSync(resolve(root, 'data', 'assistant.db'), { force: true })
-  const uploadDir = resolve(root, 'uploads')
+function cleanUploads() {
   if (!existsSync(uploadDir)) return
   for (const file of readdirSync(uploadDir)) {
     if (file !== '.gitkeep') {
@@ -33,12 +35,83 @@ function resetDemoData() {
   }
 }
 
+function backupRuntimeData() {
+  const state = {
+    hadDb: existsSync(dataDb),
+    hadUploads: existsSync(uploadDir)
+  }
+  if (state.hadDb) cpSync(dataDb, resolve(backupRoot, 'assistant.db'))
+  if (state.hadUploads) cpSync(uploadDir, resolve(backupRoot, 'uploads'), { recursive: true })
+  return state
+}
+
+function resetDemoData() {
+  rmSync(dataDb, { force: true })
+  cleanUploads()
+}
+
+async function restoreRuntimeData(state) {
+  await rmWithRetry(dataDb, { force: true })
+  if (state.hadDb) cpSync(resolve(backupRoot, 'assistant.db'), dataDb)
+  cleanUploads()
+  const backupUploads = resolve(backupRoot, 'uploads')
+  if (state.hadUploads && existsSync(backupUploads)) {
+    for (const file of readdirSync(backupUploads)) {
+      if (file !== '.gitkeep') {
+        cpSync(resolve(backupUploads, file), resolve(uploadDir, file), { recursive: true })
+      }
+    }
+  }
+  rmSync(backupRoot, { recursive: true, force: true })
+}
+
 function run(command, args, cwd) {
   return spawn(command, args, {
     cwd,
     stdio: 'ignore',
     windowsHide: true
   })
+}
+
+function wait(ms) {
+  return new Promise((resolveWait) => setTimeout(resolveWait, ms))
+}
+
+async function stopProcess(process) {
+  if (!process || process.killed || process.exitCode !== null) return
+  process.kill()
+  await Promise.race([
+    new Promise((resolveWait) => process.once('exit', resolveWait)),
+    wait(5000)
+  ])
+}
+
+async function rmWithRetry(path, options) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      rmSync(path, options)
+      return
+    } catch (error) {
+      if (error.code !== 'EPERM' && error.code !== 'EBUSY') throw error
+      await wait(250)
+    }
+  }
+  rmSync(path, options)
+}
+
+function cleanupDevPorts() {
+  if (process.platform !== 'win32') return
+  for (const port of [8000, 5173]) {
+    execFileSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        `Get-NetTCPConnection -LocalPort ${port} -ErrorAction SilentlyContinue | Where-Object { $_.State -eq 'Listen' } | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`
+      ],
+      { stdio: 'ignore' }
+    )
+  }
 }
 
 async function waitFor(url, timeoutMs = 45000) {
@@ -79,6 +152,7 @@ async function uploadTestMaterial() {
   }
 }
 
+const runtimeState = backupRuntimeData()
 resetDemoData()
 
 const backend = run(python, ['-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8000'], resolve(root, 'backend'))
@@ -125,6 +199,8 @@ try {
   await browser.close()
   console.log(`Screenshots saved to ${screenshotDir}`)
 } finally {
-  backend.kill()
-  frontend.kill()
+  await stopProcess(backend)
+  await stopProcess(frontend)
+  cleanupDevPorts()
+  await restoreRuntimeData(runtimeState)
 }

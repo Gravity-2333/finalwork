@@ -23,7 +23,7 @@ from .workflow import (
 
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
-MAX_BATCH_FILES = 10
+MAX_BATCH_FILES = 20
 
 Provider = Literal["local_ollama", "cloud_ollama", "openai_compatible", "mock"]
 

@@ -25,7 +25,7 @@ function onUpload(event) {
     <label class="upload-box">
       <input type="file" multiple accept=".txt,.md,.docx,.pdf" :disabled="loading" @change="onUpload" />
       <span>批量上传课程资料</span>
-      <small>支持 txt / md / docx / pdf，单个文件不超过 25MB</small>
+      <small>支持 txt / md / docx / pdf，一次最多 20 个，单个不超过 25MB</small>
     </label>
     <div class="doc-list">
       <article v-for="doc in documents" :key="doc.id">

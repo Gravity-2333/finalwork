@@ -66,6 +66,7 @@ const faceProfileState = reactive({ enrolled: false, username: '杨翰飞', need
 const faceManageOpen = ref(false)
 const faceReplaceToken = ref('')
 const maxUploadBytes = 25 * 1024 * 1024
+const maxUploadFiles = 20
 let faceProfileLookupId = 0
 
 const providerDefaults = {
@@ -254,6 +255,10 @@ async function handleUpload(event) {
   const files = Array.from(event.target.files || [])
   event.target.value = ''
   if (!files.length) return
+  if (files.length > maxUploadFiles) {
+    status.warning = `一次最多上传 ${maxUploadFiles} 个文件，请分批选择。`
+    return
+  }
   const oversized = files.filter((file) => file.size > maxUploadBytes)
   if (oversized.length) {
     status.warning = `单个文件不能超过 25MB：${oversized.map((file) => file.name).join('、')}`
