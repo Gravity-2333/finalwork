@@ -1,5 +1,6 @@
 <script setup>
 import { X } from 'lucide-vue-next'
+import PromptTextarea from './PromptTextarea.vue'
 
 defineProps({
   settings: { type: Object, required: true },
@@ -20,7 +21,7 @@ defineEmits(['close', 'save', 'reset'])
         <button class="icon-action" title="关闭" @click="$emit('close')"><X :size="18" /></button>
       </header>
 
-      <div class="settings-grid">
+      <div class="settings-body">
         <article class="settings-section">
           <h3>资料处理</h3>
           <ul>
@@ -46,18 +47,20 @@ defineEmits(['close', 'save', 'reset'])
         <article class="settings-section prompt-section">
           <h3>AI 提示词模板</h3>
           <p class="token-help" v-pre>可用变量：{{context}}、{{chapter_title}}、{{chapter_objective}}</p>
-          <label>
-            <span>课程大纲</span>
-            <textarea v-model="settings.prompts.outline" :placeholder="defaultPrompts.outline"></textarea>
-          </label>
-          <label>
-            <span>章节内容</span>
-            <textarea v-model="settings.prompts.chapter" :placeholder="defaultPrompts.chapter"></textarea>
-          </label>
-          <label>
-            <span>测验出题</span>
-            <textarea v-model="settings.prompts.quiz" :placeholder="defaultPrompts.quiz"></textarea>
-          </label>
+          <div class="prompt-editor-grid">
+            <label>
+              <span>课程大纲</span>
+              <PromptTextarea v-model="settings.prompts.outline" :placeholder="defaultPrompts.outline" />
+            </label>
+            <label>
+              <span>章节内容</span>
+              <PromptTextarea v-model="settings.prompts.chapter" :placeholder="defaultPrompts.chapter" />
+            </label>
+            <label>
+              <span>测验出题</span>
+              <PromptTextarea v-model="settings.prompts.quiz" :placeholder="defaultPrompts.quiz" />
+            </label>
+          </div>
         </article>
       </div>
 

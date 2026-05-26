@@ -873,12 +873,15 @@ pre {
   place-items: center;
   padding: 20px;
   background: rgba(15, 31, 53, 0.42);
+  overflow: hidden;
 }
 
 .settings-modal {
-  width: min(980px, 100%);
-  max-height: min(86vh, 760px);
-  overflow: auto;
+  width: min(1040px, 100%);
+  max-height: min(88vh, 780px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
   border-radius: 8px;
   border: 1px solid #d7e2ef;
   background: #fff;
@@ -905,11 +908,19 @@ pre {
   color: #64748b;
 }
 
-.settings-grid {
+.settings-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
   padding: 16px 18px;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.settings-body::-webkit-scrollbar,
+.prompt-textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .settings-section {
@@ -947,13 +958,26 @@ pre {
 }
 
 .settings-section textarea {
-  min-height: 118px;
-  resize: vertical;
+  min-height: 112px;
+  max-height: 220px;
+  resize: none;
   line-height: 1.6;
+  scrollbar-width: none;
 }
 
 .prompt-section {
   grid-column: 1 / -1;
+}
+
+.prompt-editor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.prompt-textarea {
+  display: block;
+  transition: height 0.12s ease;
 }
 
 .token-help {
@@ -1020,7 +1044,8 @@ pre {
     max-height: none;
   }
 
-  .settings-grid {
+  .settings-body,
+  .prompt-editor-grid {
     grid-template-columns: 1fr;
   }
 
