@@ -125,6 +125,34 @@ def all_context(limit: int = 12) -> str:
     return "\n\n".join(row["content"] for row in rows)
 
 
+def knowledge_stats() -> dict:
+    with connect() as conn:
+        row = conn.execute("SELECT COUNT(*) AS chunks, COALESCE(SUM(LENGTH(content)), 0) AS chars FROM chunks").fetchone()
+    return {"total_chunks": int(row["chunks"] or 0), "total_chars": int(row["chars"] or 0)}
+
+
+def outline_context(limit: int = 24) -> str:
+    keywords = ("目录", "第 1 章", "第1章", "第一章", "Part", "第一部分", "第二部分", "本章包括", "本章小结", "学习路线图", "关于本书")
+    with connect() as conn:
+        rows = conn.execute("SELECT id, content FROM chunks ORDER BY id").fetchall()
+    scored = []
+    for index, row in enumerate(rows):
+        content = row["content"]
+        score = 0
+        score += max(0, 16 - index) * 0.35
+        score += sum(5 for keyword in keywords if keyword in content)
+        score += len(re.findall(r"(第\s*[一二三四五六七八九十0-9]+\s*[章节]|Chapter\s+\d+|Part\s+\d+)", content, re.IGNORECASE)) * 3
+        scored.append((score, row["id"], content))
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    selected = [content for score, _, content in scored[:limit] if score > 0]
+    return "\n\n".join(selected) or all_context(limit)
+
+
+def chapter_context(title: str, objective: str, limit: int = 14) -> str:
+    chunks = search_chunks(f"{title} {objective}", limit)
+    return "\n\n".join(item["content"] for item in chunks)
+
+
 def _existing_document(filename: str) -> dict | None:
     with connect() as conn:
         row = conn.execute("SELECT * FROM documents WHERE filename=? ORDER BY id DESC LIMIT 1", (filename,)).fetchone()

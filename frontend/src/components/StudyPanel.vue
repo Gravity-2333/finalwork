@@ -16,7 +16,7 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
   <section class="main-panel">
     <div class="toolbar">
       <button class="primary" :disabled="loading" @click="$emit('outline')">
-        <RefreshCw :size="17" /> 生成课程大纲
+        <RefreshCw :size="17" /> {{ chapters.length ? '重新生成大纲' : '生成课程大纲' }}
       </button>
       <button :disabled="loading || !selectedChapter" @click="$emit('quiz')">
         <Play :size="17" /> 开始测验
@@ -27,7 +27,7 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
     <div v-if="!chapters.length" class="empty-state">
       <BrainCircuit :size="34" />
       <h2>从知识库生成学习路径</h2>
-      <p>上传资料后点击“生成课程大纲”，系统会创建章节、学习目标和后续测验入口。</p>
+      <p>上传资料后点击“生成课程学习路径”，系统会创建章节、学习目标和后续测验入口。</p>
       <button class="primary" :disabled="loading" @click="$emit('outline')"><RefreshCw :size="17" /> 生成课程大纲</button>
     </div>
 
@@ -45,7 +45,7 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
             <p>{{ chapter.objective }}</p>
           </div>
           <div class="progress-line"><span :style="{ width: `${chapter.progress}%` }"></span></div>
-          <button :disabled="loading" @click.stop="$emit('content', chapter)">生成学习内容</button>
+          <button :disabled="loading" @click.stop="$emit('content', chapter)">{{ chapter.content ? '重新生成内容' : '生成学习内容' }}</button>
         </article>
       </aside>
 
@@ -55,7 +55,7 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
             <h2>{{ selectedChapter.title }}</h2>
             <p class="objective">{{ selectedChapter.objective }}</p>
           </div>
-          <button class="primary" :disabled="loading" @click="$emit('content', selectedChapter)">生成内容</button>
+          <button class="primary" :disabled="loading" @click="$emit('content', selectedChapter)">{{ selectedChapter.content ? '重新生成内容' : '生成学习内容' }}</button>
         </div>
         <MarkdownBlock
           :content="selectedChapter.content"

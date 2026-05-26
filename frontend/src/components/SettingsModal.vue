@@ -67,7 +67,7 @@ const sections = [
 
           <article v-if="activeSection === 'prompts'" class="settings-section prompt-section">
             <h3>AI 提示词模板</h3>
-            <p class="token-help" v-pre>可用变量：{{context}}、{{chapter_title}}、{{chapter_objective}}</p>
+            <p class="token-help" v-pre>可用变量：{{context}}、{{chapter_count}}、{{chapter_title}}、{{chapter_objective}}</p>
             <div class="prompt-editor-grid">
               <label>
                 <span>课程大纲</span>

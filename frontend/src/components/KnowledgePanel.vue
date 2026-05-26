@@ -19,7 +19,7 @@ function onUpload(event) {
       <Database :size="19" />
       <div>
         <h2>知识库</h2>
-        <p>先整理资料，确认后再初始化课程</p>
+        <p>先整理资料，确认后再生成学习路径</p>
       </div>
       <button class="icon-action" :disabled="loading || !documents.length" title="清空资料库" @click="$emit('clear')">
         <Trash2 :size="16" />
@@ -34,16 +34,15 @@ function onUpload(event) {
     <div class="library-actions">
       <button class="primary" :disabled="loading || !documents.length" @click="$emit('initialize')">
         <PlayCircle :size="16" />
-        完成上传并初始化课程
+        生成课程学习路径
       </button>
-      <small>点击后会生成大纲、章节内容和测验。</small>
+      <small>系统将基于已入库资料生成课程大纲、章节内容和测验。</small>
     </div>
     <div class="doc-list">
       <article v-for="doc in documents" :key="doc.id">
         <div>
           <strong :title="doc.filename">{{ doc.filename }}</strong>
           <span>{{ doc.chunk_count }} 个切片 · 已入库</span>
-          <small>{{ doc.summary || '已入库，可用于生成学习内容。' }}</small>
         </div>
         <button class="icon-action danger" :disabled="loading" title="删除该资料" @click="$emit('delete', doc)">
           <Trash2 :size="15" />

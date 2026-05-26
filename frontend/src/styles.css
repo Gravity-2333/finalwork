@@ -817,6 +817,22 @@ pre {
   font-weight: 800;
 }
 
+.quiz-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.quiz-tags small {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .score {
   margin: 10px 0 0;
   font-weight: 700;
@@ -836,10 +852,46 @@ pre {
 
 .score-card {
   display: grid;
+  gap: 12px;
 }
 
 .score-card span {
   color: var(--color-muted);
+}
+
+.score-card p {
+  margin: 0;
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.answer-review {
+  display: grid;
+  gap: 10px;
+}
+
+.answer-review article {
+  padding: 10px;
+  border: 1px solid #c7d5e7;
+  border-radius: var(--radius-sm);
+  background: #fff;
+}
+
+.answer-review article.correct {
+  border-color: #86efac;
+}
+
+.answer-review article.wrong {
+  border-color: #fecaca;
+}
+
+.answer-review small {
+  display: block;
+  margin-top: 4px;
 }
 
 .wrong-list strong {
@@ -858,6 +910,11 @@ pre {
   padding: 10px;
   border-radius: var(--radius-sm);
   background: var(--color-surface-soft);
+}
+
+.wrong-list .review-advice {
+  margin-top: 8px;
+  color: #475569;
 }
 
 .voice-page {
@@ -1139,8 +1196,7 @@ pre {
   scrollbar-width: none;
 }
 
-.settings-body::-webkit-scrollbar,
-.prompt-textarea::-webkit-scrollbar {
+.settings-body::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
@@ -1264,6 +1320,12 @@ pre {
 
 .prompt-textarea {
   display: block;
+  min-height: 220px;
+  max-height: 420px;
+  overflow-y: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.6;
+  white-space: pre-wrap;
   transition: height 0.12s ease;
 }
 

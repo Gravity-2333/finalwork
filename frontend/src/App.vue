@@ -73,16 +73,16 @@ const settingsOpen = ref(false)
 const faceReplaceToken = ref('')
 const maxUploadBytes = 25 * 1024 * 1024
 const maxUploadFiles = 20
-const promptVersion = 2
+const promptVersion = 3
 let faceProfileLookupId = 0
 
 const defaultPrompts = {
   outline:
-    '你是课程学习大纲生成器。\n请严格基于课程资料生成 4 个章节的学习大纲。\n\n输出规则：\n1. 只输出 4 行。\n2. 每行格式必须是：章节标题 - 学习目标\n3. 不要输出寒暄语。\n4. 不要输出“好的”“下面是”“这是为你生成的”等说明。\n5. 不要输出 Markdown 代码块。\n6. 不要输出编号以外的解释文字。\n\n课程资料：\n{{context}}',
+    '你是一个严谨的课程学习路径设计师。\n\n请基于给定课程资料，为学生设计一套系统化学习大纲。大纲要能覆盖资料的主要知识结构，而不是只概括前几页内容。\n\n资料规模信息：\n- 建议章节数量：{{chapter_count}} 章\n\n生成要求：\n1. 严格输出 {{chapter_count}} 行。\n2. 每行只表示一个学习章节。\n3. 每行格式必须为：章节标题 - 学习目标\n4. 章节标题要简洁明确，适合作为学习路径卡片标题。\n5. 学习目标要具体，说明学生学完本章应该掌握什么。\n6. 章节之间要有递进关系，从基础概念到实践应用，再到总结提升。\n7. 如果资料中存在目录、章节标题、学习路线图，请优先参考原资料结构。\n8. 不要只生成泛泛的“概述、基础、应用、总结”四类标题。\n9. 不要输出寒暄语。\n10. 不要输出“好的”“下面是”“这是为你生成的”等说明。\n11. 不要输出 Markdown 代码块。\n12. 不要输出额外解释。\n\n课程资料：\n{{context}}',
   chapter:
-    '你是课程章节内容生成器。\n请严格基于资料，为章节《{{chapter_title}}》生成可直接展示给学生阅读的 Markdown 学习内容。\n\n章节目标：\n{{chapter_objective}}\n\n输出规则：\n1. 只输出正文 Markdown。\n2. 第一行必须直接是二级标题，例如：## 核心概念\n3. 不要输出“好的”“下面是”“这是为你生成的”“以下内容”等寒暄或说明。\n4. 不要重复章节标题和章节目标。\n5. 不要使用 Markdown 代码围栏。\n6. 内容必须包含：核心概念、学习步骤、重点难点、复盘建议。\n7. 尽量结合资料内容，不要泛泛而谈。\n\n课程资料：\n{{context}}',
+    '你是一个专业的课程章节讲义生成器。\n\n请严格基于课程资料，为章节《{{chapter_title}}》生成一份可以直接展示给学生学习的 Markdown 讲义。\n\n章节目标：\n{{chapter_objective}}\n\n内容质量要求：\n1. 内容必须有实际学习价值，不能只是几句话概括。\n2. 内容应当适合学生自学，讲解要清楚、分层、有逻辑。\n3. 要结合资料中的术语、概念、例子、章节结构，不要泛泛而谈。\n4. 对于教材类资料，应尽量还原教材知识脉络。\n5. 不要编造资料中完全没有的具体页码、作者观点或代码细节。\n6. 可以适度补充通用解释，但必须服务于理解资料内容。\n7. 输出内容建议不少于 900 个中文字符；如果资料上下文足够，建议 1200~1800 个中文字符。\n8. 不要输出寒暄语。\n9. 不要输出“好的”“下面是”“这是为你生成的”“以下内容”等开场白。\n10. 不要重复章节标题和章节目标。\n11. 不要使用 Markdown 代码围栏。\n\n输出结构必须包含以下二级标题：\n\n## 学习目标\n用 3~5 条项目符号说明本章学完后应掌握的能力。\n\n## 核心概念\n解释本章最重要的概念。每个概念都要有简明解释，不能只列名词。\n\n## 知识讲解\n按照由浅入深的方式展开说明。必要时使用有序列表、小标题和加粗突出重点。\n\n## 典型例子或应用场景\n结合资料内容说明这些知识可以解决什么问题，或者在实际项目中如何使用。\n\n## 重点难点\n列出本章容易混淆、容易忽视、需要重点理解的地方。\n\n## 易错点提醒\n列出学生学习或答题时容易犯的错误，并说明原因。\n\n## 本章小结\n用简洁语言总结本章核心内容。\n\n## 复盘建议\n给出学生复习本章时可以采用的方法，例如画图、对比、做题、复述、代码实践等。\n\n课程资料：\n{{context}}',
   quiz:
-    '你是章节测验出题器。\n请严格基于资料，为章节《{{chapter_title}}》生成 3 道单选题。\n\n章节目标：\n{{chapter_objective}}\n\n输出规则：\n1. 只输出 JSON 数组。\n2. 不要输出 Markdown 代码块。\n3. 不要输出任何解释文字。\n4. JSON 数组中每个对象必须包含：question、options、answer、explanation。\n5. options 必须是 4 个选项的数组。\n6. answer 必须与 options 中某一项完全一致。\n\n课程资料：\n{{context}}'
+    '你是一个严谨的课程测验出题器。\n\n请严格基于课程资料和章节学习目标，为章节《{{chapter_title}}》生成一组用于检测学习成果的测验题。\n\n章节目标：\n{{chapter_objective}}\n\n出题要求：\n1. 生成 10 道单选题。\n2. 每题 4 个选项。\n3. 题目必须覆盖本章主要知识点，不要集中考同一个概念。\n4. 题目需要有难度层级：3 道基础记忆题、3 道概念理解题、2 道应用分析题、1 道易错辨析题、1 道拓展思考题。\n5. 选项不能过于明显，错误选项要有一定迷惑性。\n6. 正确答案必须与 options 中某一项完全一致。\n7. explanation 必须解释为什么正确，以及为什么其他选项不合适。\n8. 不要输出 Markdown 代码块。\n9. 不要输出任何解释文字。\n10. 只输出合法 JSON 数组。\n\nJSON 对象必须包含 type、difficulty、question、options、answer、explanation。\n\n课程资料：\n{{context}}'
 }
 
 const appSettings = reactive({
@@ -149,7 +149,7 @@ const nextAction = computed(() => {
   if (courseBootstrapping.value) {
     return {
       title: '正在初始化课程',
-      description: status.message || '系统正在按顺序生成大纲、章节内容和测验。',
+      description: status.message || '正在初始化课程，请勿重复点击。',
       action: '初始化中',
       view: 'study',
       task: 'navigate',
@@ -169,7 +169,7 @@ const nextAction = computed(() => {
     return {
       title: '初始化课程',
       description: '确认资料上传完成后，一次生成大纲、章节内容和测验。',
-      action: '开始初始化',
+      action: '生成学习路径',
       view: 'library',
       task: 'initialize'
     }
@@ -457,7 +457,7 @@ async function handleUpload(event) {
     await refreshDocuments()
     if (documents.length) {
       activeView.value = 'library'
-      status.message = `${status.message} 请确认资料无误后点击“完成上传并初始化课程”。`
+      status.message = `${status.message} 请确认资料无误后点击“生成课程学习路径”。`
     }
   }
 }
@@ -612,6 +612,29 @@ async function submitCurrentQuiz() {
     chapters.value[index] = data.chapter
     status.message = `测验完成：${data.score}/${data.total}，错题已自动归档。`
     await loadWrongs()
+  }
+}
+
+async function retryCurrentQuiz() {
+  Object.keys(answers).forEach((key) => delete answers[key])
+  result.value = null
+  if (selectedChapter.value) await generateQuizForSelected()
+}
+
+function studyNextChapter() {
+  if (!chapters.value.length || !selectedChapter.value) {
+    activeView.value = 'study'
+    return
+  }
+  const index = chapters.value.findIndex((chapter) => chapter.id === selectedChapter.value.id)
+  const next = chapters.value[index + 1]
+  if (next) {
+    selectedChapterId.value = next.id
+    activeView.value = 'study'
+    status.message = `已切换到下一章《${next.title}》。`
+  } else {
+    activeView.value = 'study'
+    status.message = '已经是最后一章，请复盘错题并整理课程总结。'
   }
 }
 
@@ -799,6 +822,9 @@ function applyProviderDefaults() {
         :loading="status.loading"
         @submit="submitCurrentQuiz"
         @study="activeView = 'study'"
+        @review="activeView = 'quiz'"
+        @retry="retryCurrentQuiz"
+        @next="studyNextChapter"
       />
       <section v-if="activeView === 'voice'" class="voice-page">
         <header class="voice-hero">

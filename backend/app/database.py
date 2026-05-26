@@ -59,6 +59,8 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS quizzes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 chapter_id INTEGER NOT NULL,
+                type TEXT NOT NULL DEFAULT '综合题',
+                difficulty TEXT NOT NULL DEFAULT 'normal',
                 question TEXT NOT NULL,
                 options TEXT NOT NULL,
                 answer TEXT NOT NULL,
@@ -83,6 +85,8 @@ def init_db() -> None:
             );
             """
         )
+        _ensure_column(conn, "quizzes", "type", "TEXT NOT NULL DEFAULT '综合题'")
+        _ensure_column(conn, "quizzes", "difficulty", "TEXT NOT NULL DEFAULT 'normal'")
 
 
 def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -95,3 +99,9 @@ def decode_options(value: str) -> list[str]:
     except json.JSONDecodeError:
         return []
     return parsed if isinstance(parsed, list) else []
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")

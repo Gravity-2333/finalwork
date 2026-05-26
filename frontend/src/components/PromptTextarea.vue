@@ -8,8 +8,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 const textarea = ref(null)
-const minHeight = 112
-const maxHeight = 220
+const minHeight = 220
+const maxHeight = 420
 
 onMounted(resize)
 
