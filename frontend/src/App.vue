@@ -7,6 +7,7 @@ import HeroHeader from './components/HeroHeader.vue'
 import KnowledgePanel from './components/KnowledgePanel.vue'
 import ProviderPanel from './components/ProviderPanel.vue'
 import QuizPanel from './components/QuizPanel.vue'
+import SettingsModal from './components/SettingsModal.vue'
 import StudyPanel from './components/StudyPanel.vue'
 import {
   createChapterContent,
@@ -64,10 +65,32 @@ const activeView = ref('library')
 const face = reactive({ ok: false })
 const faceProfileState = reactive({ enrolled: false, username: '杨翰飞', needsUpgrade: false })
 const faceManageOpen = ref(false)
+const settingsOpen = ref(false)
 const faceReplaceToken = ref('')
 const maxUploadBytes = 25 * 1024 * 1024
 const maxUploadFiles = 20
 let faceProfileLookupId = 0
+
+const defaultPrompts = {
+  outline:
+    '请根据课程资料生成4个章节的学习大纲。\n要求：每行格式为“章节标题 - 学习目标”，章节标题简洁，学习目标适合学生复习。\n资料：\n{{context}}',
+  chapter:
+    '请为章节《{{chapter_title}}》生成学习内容。\n章节目标：{{chapter_objective}}\n要求包含核心概念、学习步骤、重点难点和复盘建议，语言简洁、结构清晰。\n资料：\n{{context}}',
+  quiz:
+    '请基于以下资料为章节《{{chapter_title}}》生成3道单选题。\n输出 JSON 数组，每项包含 question/options/answer/explanation。\n章节目标：{{chapter_objective}}\n资料：\n{{context}}'
+}
+
+const appSettings = reactive({
+  upload: {
+    maxFiles: maxUploadFiles,
+    maxSizeText: '25MB'
+  },
+  prompts: {
+    outline: defaultPrompts.outline,
+    chapter: defaultPrompts.chapter,
+    quiz: defaultPrompts.quiz
+  }
+})
 
 const providerDefaults = {
   mock: {
@@ -145,6 +168,7 @@ const { listening, supported, transcript, voiceStatus, start, testMicrophone, st
 })
 
 onMounted(async () => {
+  loadSettings()
   applyProviderDefaults()
   await refreshFaceProfile()
   await refreshHealth()
@@ -390,8 +414,35 @@ function providerPayload() {
     base_url: config.base_url,
     api_key: config.key_mode === 'manual' ? config.api_key : '',
     api_key_env: config.key_mode === 'env' ? config.api_key_env : '',
-    langsmith_enabled: config.langsmith_enabled
+    langsmith_enabled: config.langsmith_enabled,
+    prompt_templates: {
+      outline: appSettings.prompts.outline,
+      chapter: appSettings.prompts.chapter,
+      quiz: appSettings.prompts.quiz
+    }
   }
+}
+
+function loadSettings() {
+  const raw = localStorage.getItem('ai-study-settings')
+  if (!raw) return
+  try {
+    const saved = JSON.parse(raw)
+    Object.assign(appSettings.prompts, saved.prompts || {})
+  } catch {
+    localStorage.removeItem('ai-study-settings')
+  }
+}
+
+function saveSettings() {
+  localStorage.setItem('ai-study-settings', JSON.stringify({ prompts: appSettings.prompts }))
+  settingsOpen.value = false
+  status.message = '系统设置已保存，后续 AI 生成会使用当前提示词模板。'
+}
+
+function resetPrompts() {
+  Object.assign(appSettings.prompts, defaultPrompts)
+  status.message = '提示词模板已恢复默认。'
 }
 
 function applyProviderDefaults() {
@@ -436,7 +487,10 @@ function applyProviderDefaults() {
         <strong>{{ status.warning ? '需要处理' : '运行状态' }}</strong>
         <span :class="{ warning: status.warning }">{{ status.warning || status.message }}</span>
       </div>
-      <button @click="activeView = 'settings'"><Settings :size="16" /> 模型设置</button>
+      <div class="status-actions">
+        <button @click="settingsOpen = true"><Settings :size="16" /> 系统设置</button>
+        <button @click="activeView = 'settings'"><Settings :size="16" /> 模型设置</button>
+      </div>
     </section>
 
     <DashboardMetrics
@@ -540,5 +594,13 @@ function applyProviderDefaults() {
         @load-cloud-models="loadCloudModels"
       />
     </section>
+    <SettingsModal
+      v-if="settingsOpen"
+      :settings="appSettings"
+      :default-prompts="defaultPrompts"
+      @close="settingsOpen = false"
+      @save="saveSettings"
+      @reset="resetPrompts"
+    />
   </main>
 </template>

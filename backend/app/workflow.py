@@ -20,12 +20,36 @@ class AssistantState(TypedDict, total=False):
     api_key: str
     api_key_env: str
     context: str
+    chapter_title: str
+    chapter_objective: str
+    prompt_templates: dict[str, str]
     prompt: str
     result: str
     warning: str
 
 
-def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "") -> dict:
+DEFAULT_PROMPTS = {
+    "outline": (
+        "请根据课程资料生成4个章节的学习大纲。\n"
+        "要求：每行格式为“章节标题 - 学习目标”，章节标题简洁，学习目标适合学生复习。\n"
+        "资料：\n{{context}}"
+    ),
+    "chapter": (
+        "请为章节《{{chapter_title}}》生成学习内容。\n"
+        "章节目标：{{chapter_objective}}\n"
+        "要求包含核心概念、学习步骤、重点难点和复盘建议，语言简洁、结构清晰。\n"
+        "资料：\n{{context}}"
+    ),
+    "quiz": (
+        "请基于以下资料为章节《{{chapter_title}}》生成3道单选题。\n"
+        "输出 JSON 数组，每项包含 question/options/answer/explanation。\n"
+        "章节目标：{{chapter_objective}}\n"
+        "资料：\n{{context}}"
+    ),
+}
+
+
+def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "", prompt_templates: dict[str, str] | None = None) -> dict:
     _require_documents()
     state = _graph().invoke(
         {
@@ -35,6 +59,7 @@ def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str
             "base_url": base_url,
             "api_key": api_key,
             "api_key_env": api_key_env,
+            "prompt_templates": prompt_templates or {},
         }
     )
     chapters = _parse_outline(state["result"])
@@ -49,7 +74,7 @@ def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str
     return {"chapters": list_chapters(), "warning": state.get("warning", "")}
 
 
-def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "") -> dict:
+def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "", prompt_templates: dict[str, str] | None = None) -> dict:
     _require_documents()
     state = _graph().invoke(
         {
@@ -60,6 +85,7 @@ def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: 
             "base_url": base_url,
             "api_key": api_key,
             "api_key_env": api_key_env,
+            "prompt_templates": prompt_templates or {},
         }
     )
     with connect() as conn:
@@ -67,14 +93,18 @@ def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: 
     return {"chapter": get_chapter(chapter_id), "warning": state.get("warning", "")}
 
 
-def generate_quiz(chapter_id: int, provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "") -> dict:
+def generate_quiz(chapter_id: int, provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "", prompt_templates: dict[str, str] | None = None) -> dict:
     _require_documents()
     chapter = get_chapter(chapter_id)
     context = "\n".join(item["content"] for item in search_chunks(chapter["title"], 5))
-    prompt = (
-        f"请基于以下资料为章节《{chapter['title']}》生成3道单选题。"
-        "输出 JSON 数组，每项包含 question/options/answer/explanation。\n"
-        f"资料：{context or chapter['content']}"
+    prompt = _render_prompt(
+        (prompt_templates or {}).get("quiz"),
+        "quiz",
+        {
+            "context": context or chapter["content"],
+            "chapter_title": chapter["title"],
+            "chapter_objective": chapter["objective"],
+        },
     )
     result = call_provider(provider, prompt, model, base_url, api_key, api_key_env)
     questions = _parse_quiz(result.text, chapter)
@@ -183,16 +213,21 @@ def _retrieve(state: AssistantState) -> AssistantState:
 
 def _compose(state: AssistantState) -> AssistantState:
     if state["task"] == "outline":
-        state["prompt"] = (
-            "请根据课程资料生成4个章节的学习大纲。"
-            "每行格式为：章节标题 - 学习目标。\n资料：\n"
-            f"{state.get('context', '')}"
+        state["prompt"] = _render_prompt(
+            state.get("prompt_templates", {}).get("outline"),
+            "outline",
+            {"context": state.get("context", "")},
         )
     else:
         chapter = get_chapter(int(state["chapter_id"]))
-        state["prompt"] = (
-            f"请为章节《{chapter['title']}》生成学习内容，包含核心概念、学习步骤、重点难点和复盘建议。\n"
-            f"章节目标：{chapter['objective']}\n资料：\n{state.get('context', '')}"
+        state["prompt"] = _render_prompt(
+            state.get("prompt_templates", {}).get("chapter"),
+            "chapter",
+            {
+                "context": state.get("context", ""),
+                "chapter_title": chapter["title"],
+                "chapter_objective": chapter["objective"],
+            },
         )
     return state
 
@@ -209,6 +244,13 @@ def _generate(state: AssistantState) -> AssistantState:
     state["result"] = result.text
     state["warning"] = result.warning
     return state
+
+
+def _render_prompt(template: str | None, key: str, values: dict[str, str]) -> str:
+    text = (template or "").strip() or DEFAULT_PROMPTS[key]
+    for name, value in values.items():
+        text = text.replace(f"{{{{{name}}}}}", value or "")
+    return text
 
 
 def _parse_outline(text: str) -> list[dict]:

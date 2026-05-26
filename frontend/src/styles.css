@@ -283,7 +283,14 @@ h1 {
   border-radius: 8px;
 }
 
-.app-status div {
+.status-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.app-status > div:first-child {
   display: grid;
   gap: 2px;
 }
@@ -741,6 +748,108 @@ pre {
   color: #173b72;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 31, 53, 0.42);
+}
+
+.settings-modal {
+  width: min(980px, 100%);
+  max-height: min(86vh, 760px);
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid #d7e2ef;
+  background: #fff;
+  box-shadow: 0 24px 60px rgba(15, 31, 53, 0.28);
+}
+
+.modal-header,
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #e2eaf4;
+}
+
+.modal-header h2,
+.settings-section h3 {
+  margin: 0;
+}
+
+.modal-header p {
+  margin: 5px 0 0;
+  color: #64748b;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.settings-section {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid #dbe5f0;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.settings-section ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #52637a;
+  line-height: 1.7;
+}
+
+.settings-section label {
+  display: grid;
+  gap: 6px;
+  color: #52637a;
+}
+
+.settings-section input,
+.settings-section textarea {
+  width: 100%;
+  border: 1px solid #cfdbea;
+  border-radius: 8px;
+  background: #fff;
+  color: #27364b;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.settings-section textarea {
+  min-height: 118px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.prompt-section {
+  grid-column: 1 / -1;
+}
+
+.token-help {
+  margin: 0;
+  color: #64748b;
+}
+
+.modal-actions {
+  border-top: 1px solid #e2eaf4;
+  border-bottom: 0;
+  justify-content: flex-end;
+}
+
 @media (max-width: 1180px) {
   .workspace {
     grid-template-columns: 1fr;
@@ -786,6 +895,10 @@ pre {
   .voice-page,
   .content-frame > .provider-panel {
     max-height: none;
+  }
+
+  .settings-grid {
+    grid-template-columns: 1fr;
   }
 
   .login-card {

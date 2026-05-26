@@ -35,6 +35,7 @@ class ProviderConfig(BaseModel):
     api_key: str = ""
     api_key_env: str = ""
     langsmith_enabled: bool = False
+    prompt_templates: dict[str, str] = {}
 
 
 class SubmitPayload(BaseModel):
@@ -136,7 +137,7 @@ async def _read_upload(file: UploadFile) -> bytes:
 def outline(config: ProviderConfig) -> dict:
     _configure_langsmith(config)
     try:
-        return run_outline(config.provider, config.model, config.base_url, config.api_key, config.api_key_env)
+        return run_outline(config.provider, config.model, config.base_url, config.api_key, config.api_key_env, config.prompt_templates)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -150,7 +151,7 @@ def chapters() -> dict:
 def chapter_content(chapter_id: int, config: ProviderConfig) -> dict:
     _configure_langsmith(config)
     try:
-        return generate_chapter(chapter_id, config.provider, config.model, config.base_url, config.api_key, config.api_key_env)
+        return generate_chapter(chapter_id, config.provider, config.model, config.base_url, config.api_key, config.api_key_env, config.prompt_templates)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -159,7 +160,7 @@ def chapter_content(chapter_id: int, config: ProviderConfig) -> dict:
 def chapter_quiz(chapter_id: int, config: ProviderConfig) -> dict:
     _configure_langsmith(config)
     try:
-        return generate_quiz(chapter_id, config.provider, config.model, config.base_url, config.api_key, config.api_key_env)
+        return generate_quiz(chapter_id, config.provider, config.model, config.base_url, config.api_key, config.api_key_env, config.prompt_templates)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
