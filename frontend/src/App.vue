@@ -73,9 +73,9 @@ let faceProfileLookupId = 0
 
 const defaultPrompts = {
   outline:
-    '请根据课程资料生成4个章节的学习大纲。\n要求：每行格式为“章节标题 - 学习目标”，章节标题简洁，学习目标适合学生复习。\n资料：\n{{context}}',
+    '你是学习大纲生成器。请严格根据课程资料生成4个章节的学习大纲。\n只输出4行大纲，不要寒暄、不要解释、不要标题、不要 Markdown 代码块。\n每行格式必须为：章节标题 - 学习目标。\n章节标题简洁，学习目标适合学生复习。\n资料：\n{{context}}',
   chapter:
-    '请为章节《{{chapter_title}}》生成学习内容。\n章节目标：{{chapter_objective}}\n要求包含核心概念、学习步骤、重点难点和复盘建议，语言简洁、结构清晰。\n资料：\n{{context}}',
+    '你是章节学习内容生成器。请为章节《{{chapter_title}}》生成可直接展示给学生的 Markdown 学习内容。\n章节目标：{{chapter_objective}}\n输出要求：\n1. 只输出正文 Markdown，不要出现“好的”“下面是”“这是为您生成的”等寒暄语。\n2. 不要重复章节标题和章节目标。\n3. 使用二级或三级标题、列表和加粗组织内容。\n4. 内容必须包含核心概念、学习步骤、重点难点和复盘建议。\n资料：\n{{context}}',
   quiz:
     '请基于以下资料为章节《{{chapter_title}}》生成3道单选题。\n输出 JSON 数组，每项包含 question/options/answer/explanation。\n章节目标：{{chapter_objective}}\n资料：\n{{context}}'
 }
@@ -240,6 +240,7 @@ const { listening, supported, transcript, voiceStatus, start, testMicrophone, st
 })
 
 const voiceModeText = computed(() => (listening.value ? '正在监听' : voiceStatus.testingMicrophone ? '麦克风测试中' : '待命'))
+const voiceDetail = computed(() => (voiceStatus.diagnostic === transcript.value ? '' : voiceStatus.diagnostic))
 
 onMounted(async () => {
   loadSettings()
@@ -635,7 +636,7 @@ function applyProviderDefaults() {
             <MessageCircle :size="22" />
             <div>
               <strong>{{ transcript }}</strong>
-              <span>{{ voiceStatus.diagnostic }}</span>
+              <span v-if="voiceDetail">{{ voiceDetail }}</span>
             </div>
           </div>
           <div class="voice-actions">

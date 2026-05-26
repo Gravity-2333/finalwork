@@ -1,5 +1,6 @@
 <script setup>
 import { BrainCircuit, Play, RefreshCw, Trophy } from 'lucide-vue-next'
+import MarkdownBlock from './MarkdownBlock.vue'
 
 defineProps({
   chapters: { type: Array, default: () => [] },
@@ -49,7 +50,10 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
     <article v-if="selectedChapter" class="content-panel">
       <h2>{{ selectedChapter.title }}</h2>
       <p class="objective">{{ selectedChapter.objective }}</p>
-      <pre>{{ selectedChapter.content || '点击“生成学习内容”，系统将结合知识库生成本章学习材料。' }}</pre>
+      <MarkdownBlock
+        :content="selectedChapter.content"
+        empty="点击“生成学习内容”，系统将结合知识库生成本章学习材料。"
+      />
     </article>
   </section>
 </template>

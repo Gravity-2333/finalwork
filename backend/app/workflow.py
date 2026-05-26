@@ -30,14 +30,20 @@ class AssistantState(TypedDict, total=False):
 
 DEFAULT_PROMPTS = {
     "outline": (
-        "请根据课程资料生成4个章节的学习大纲。\n"
-        "要求：每行格式为“章节标题 - 学习目标”，章节标题简洁，学习目标适合学生复习。\n"
+        "你是学习大纲生成器。请严格根据课程资料生成4个章节的学习大纲。\n"
+        "只输出4行大纲，不要寒暄、不要解释、不要标题、不要 Markdown 代码块。\n"
+        "每行格式必须为：章节标题 - 学习目标。\n"
+        "章节标题简洁，学习目标适合学生复习。\n"
         "资料：\n{{context}}"
     ),
     "chapter": (
-        "请为章节《{{chapter_title}}》生成学习内容。\n"
+        "你是章节学习内容生成器。请为章节《{{chapter_title}}》生成可直接展示给学生的 Markdown 学习内容。\n"
         "章节目标：{{chapter_objective}}\n"
-        "要求包含核心概念、学习步骤、重点难点和复盘建议，语言简洁、结构清晰。\n"
+        "输出要求：\n"
+        "1. 只输出正文 Markdown，不要出现“好的”“下面是”“这是为您生成的”等寒暄语。\n"
+        "2. 不要重复章节标题和章节目标。\n"
+        "3. 使用二级或三级标题、列表和加粗组织内容。\n"
+        "4. 内容必须包含核心概念、学习步骤、重点难点和复盘建议。\n"
         "资料：\n{{context}}"
     ),
     "quiz": (
@@ -241,7 +247,7 @@ def _generate(state: AssistantState) -> AssistantState:
         state.get("api_key", ""),
         state.get("api_key_env", ""),
     )
-    state["result"] = result.text
+    state["result"] = _clean_model_text(result.text, state.get("task", ""))
     state["warning"] = result.warning
     return state
 
@@ -251,6 +257,18 @@ def _render_prompt(template: str | None, key: str, values: dict[str, str]) -> st
     for name, value in values.items():
         text = text.replace(f"{{{{{name}}}}}", value or "")
     return text
+
+
+def _clean_model_text(text: str, task: str = "") -> str:
+    cleaned = text.strip()
+    cleaned = re.sub(r"^```(?:markdown|md|text)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    cleaned = re.sub(r"^(好的|当然|以下是|下面是|这是|为您|我将).*?(?:\n|：|:)", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"^\s*-{3,}\s*", "", cleaned)
+    if task == "chapter":
+        cleaned = re.sub(r"^#{1,3}\s*《[^》]+》\s*(?:学习指南|学习内容)?\s*\n+", "", cleaned).strip()
+        cleaned = re.sub(r"^#{1,3}\s*(?:章节)?(?:学习指南|学习内容)\s*\n+", "", cleaned).strip()
+    return cleaned
 
 
 def _parse_outline(text: str) -> list[dict]:

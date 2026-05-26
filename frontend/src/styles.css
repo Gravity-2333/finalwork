@@ -910,7 +910,7 @@ pre {
 
 .settings-body {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 210px minmax(0, 1fr);
   gap: 14px;
   padding: 16px 18px;
   overflow: auto;
@@ -921,6 +921,35 @@ pre {
 .prompt-textarea::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+.settings-sidebar {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dbe5f0;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.settings-sidebar button {
+  justify-content: flex-start;
+  min-height: 42px;
+  background: transparent;
+  border-color: transparent;
+  color: #52637a;
+}
+
+.settings-sidebar button.selected {
+  background: #fff;
+  border-color: #bfd4f2;
+  color: #173b72;
+  box-shadow: 0 6px 16px rgba(32, 58, 94, 0.06);
+}
+
+.settings-content {
+  min-width: 0;
 }
 
 .settings-section {
@@ -971,8 +1000,44 @@ pre {
 
 .prompt-editor-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
+}
+
+.markdown-body {
+  display: grid;
+  gap: 10px;
+  color: #27364b;
+  line-height: 1.75;
+}
+
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 8px 0 0;
+  color: #13233b;
+  line-height: 1.35;
+}
+
+.markdown-body p {
+  margin: 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0;
+  padding-left: 22px;
+}
+
+.markdown-body li {
+  margin: 3px 0;
+}
+
+.markdown-body code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #eef4fb;
+  color: #173b72;
 }
 
 .prompt-textarea {
