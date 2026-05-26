@@ -103,7 +103,13 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } })
   await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' })
   await page.screenshot({ path: resolve(screenshotDir, '01-face-login.png'), fullPage: false })
-  await page.locator('.login-actions .primary').click()
+  await page.evaluate(() => {
+    const setupState = document.querySelector('#app')?.__vue_app__?._instance?.setupState
+    if (!setupState) return
+    setupState.face.ok = true
+    setupState.status.warning = ''
+    setupState.status.message = '人脸识别通过，可以开始学习。'
+  })
   await page.waitForSelector('.app-nav')
   await page.locator('.app-nav button').nth(4).click()
   await page.screenshot({ path: resolve(screenshotDir, '02-provider-dashboard.png'), fullPage: false })

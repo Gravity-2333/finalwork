@@ -1,10 +1,12 @@
 import { reactive, ref } from 'vue'
 
 const COMMANDS = [
+  { name: '上传资料', keywords: ['上传', '资料', '文件'], action: 'upload' },
   { name: '生成大纲', keywords: ['大纲', '学习路径'], action: 'outline' },
   { name: '开始测验', keywords: ['测验', '考试', '出题'], action: 'quiz' },
   { name: '查看错题', keywords: ['错题', '复盘'], action: 'wrong' },
-  { name: '切换 Mock 模型', keywords: ['mock', '模型'], action: 'mock' }
+  { name: '模型设置', keywords: ['模型设置', '模型配置', '设置'], action: 'settings' },
+  { name: '切换 Mock 模型', keywords: ['mock'], action: 'mock' }
 ]
 
 export function useVoiceCommands(handlers) {

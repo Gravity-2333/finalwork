@@ -119,11 +119,24 @@ const progress = computed(() => {
 const providerHint = computed(() => providerDefaults[config.provider].hint)
 const modelPlaceholder = computed(() => providerDefaults[config.provider].model)
 const baseUrlPlaceholder = computed(() => providerDefaults[config.provider].base_url || '无需填写')
+const apiKeyEnvPlaceholder = computed(() => providerDefaults[config.provider].api_key_env || '环境变量名')
 
 const { listening, supported, transcript, voiceStatus, start, testMicrophone, stopMicrophoneTest } = useVoiceCommands({
+  upload: () => {
+    activeView.value = 'library'
+    status.message = '已切换到资料上传，请点击上传区域选择课程资料。'
+  },
   outline: generateOutline,
   quiz: generateQuizForSelected,
-  wrong: loadWrongs,
+  wrong: async () => {
+    await loadWrongs()
+    activeView.value = 'quiz'
+    status.message = '已切换到测验复盘，可查看错题归档。'
+  },
+  settings: () => {
+    activeView.value = 'settings'
+    status.message = '已切换到模型设置。'
+  },
   mock: () => {
     config.provider = 'mock'
     status.message = '已通过语音切换到 Mock Provider。'
@@ -514,6 +527,7 @@ function applyProviderDefaults() {
         :provider-hint="providerHint"
         :model-placeholder="modelPlaceholder"
         :base-url-placeholder="baseUrlPlaceholder"
+        :api-key-env-placeholder="apiKeyEnvPlaceholder"
         :cloud-models="cloudModels"
         :cloud-loading="cloudLoading"
         :test-message="testMessage"

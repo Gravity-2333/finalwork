@@ -9,6 +9,7 @@ const props = defineProps({
   providerHint: { type: String, required: true },
   modelPlaceholder: { type: String, required: true },
   baseUrlPlaceholder: { type: String, required: true },
+  apiKeyEnvPlaceholder: { type: String, required: true },
   cloudModels: { type: Array, default: () => [] },
   cloudLoading: Boolean,
   testMessage: { type: String, default: '' }
@@ -68,7 +69,7 @@ const showCloudModels = computed(() => props.config.provider === 'cloud_ollama' 
           type="password"
           placeholder="sk-..."
         />
-        <input v-else v-model="config.api_key_env" placeholder="DEEPSEEK_API_KEY" />
+        <input v-else v-model="config.api_key_env" :placeholder="apiKeyEnvPlaceholder" />
       </label>
 
       <label class="toggle">
@@ -92,4 +93,3 @@ const showCloudModels = computed(() => props.config.provider === 'cloud_ollama' 
     </p>
   </section>
 </template>
-
