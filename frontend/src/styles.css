@@ -433,8 +433,7 @@ h1 {
 
 .content-frame {
   min-height: 330px;
-  max-height: calc(100vh - 250px);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .side-panel,
@@ -454,10 +453,8 @@ h1 {
 .main-panel,
 .voice-page,
 .content-frame > .provider-panel {
-  height: 100%;
   min-height: 330px;
-  max-height: calc(100vh - 250px);
-  overflow: auto;
+  overflow: visible;
 }
 
 .content-frame > .provider-panel {
@@ -631,8 +628,7 @@ h1 {
 
 .content-panel {
   margin-top: 14px;
-  max-height: 320px;
-  overflow: auto;
+  overflow: visible;
 }
 
 .objective {
