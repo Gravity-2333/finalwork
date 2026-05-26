@@ -163,7 +163,10 @@ def document_outline_chapters() -> list[dict]:
         if path.suffix.lower() != ".pdf" or not path.exists():
             continue
         chapters.extend(_pdf_outline_chapters(path))
-    return _dedupe_outline_chapters(chapters)
+    chapters = _dedupe_outline_chapters(chapters)
+    if len(chapters) >= 4:
+        return chapters
+    return _text_outline_chapters()
 
 
 def _pdf_outline_chapters(path: Path) -> list[dict]:
@@ -204,6 +207,38 @@ def _dedupe_outline_chapters(chapters: list[dict]) -> list[dict]:
         seen.add(key)
         result.append(chapter)
     return result
+
+
+def _text_outline_chapters() -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute("SELECT content FROM chunks ORDER BY id").fetchall()
+    text = "\n".join(row["content"] for row in rows)
+    candidates = []
+    patterns = [
+        r"(?m)^\s*(第\s*[一二三四五六七八九十0-9]+\s*章\s+[^\n]{2,40})\s*$",
+        r"(?m)^\s*(Chapter\s+\d+[\s:：.-]+[^\n]{2,50})\s*$",
+    ]
+    for pattern in patterns:
+        candidates.extend(match.group(1).strip() for match in re.finditer(pattern, text, flags=re.IGNORECASE))
+    chapters = []
+    seen_numbers = set()
+    for title in candidates:
+        normalized = _clean_outline_title(title)
+        number_match = re.search(r"(?:第\s*([一二三四五六七八九十0-9]+)\s*章|Chapter\s+(\d+))", normalized, flags=re.IGNORECASE)
+        number = (number_match.group(1) or number_match.group(2)) if number_match else normalized
+        if number in seen_numbers:
+            continue
+        seen_numbers.add(number)
+        chapters.append({"title": normalized[:40], "objective": _objective_for_outline_title(normalized)})
+    return _dedupe_outline_chapters(chapters)
+
+
+def _clean_outline_title(title: str) -> str:
+    cleaned = re.sub(r"\s+", " ", title).strip()
+    cleaned = re.sub(r"[.·。．]{3,}\s*\d*\s*$", "", cleaned)
+    cleaned = re.sub(r"\s+\d{1,4}\s*$", "", cleaned)
+    cleaned = re.sub(r"^第\s*([一二三四五六七八九十0-9]+)\s*章\s*", r"第\1章 ", cleaned)
+    return cleaned.strip(" .-—")
 
 
 def _existing_document(filename: str) -> dict | None:
