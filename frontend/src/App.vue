@@ -145,7 +145,7 @@ const modelPlaceholder = computed(() => providerDefaults[config.provider].model)
 const baseUrlPlaceholder = computed(() => providerDefaults[config.provider].base_url || '无需填写')
 const apiKeyEnvPlaceholder = computed(() => providerDefaults[config.provider].api_key_env || '环境变量名')
 
-const { listening, supported, transcript, voiceStatus, start, testMicrophone, stopMicrophoneTest } = useVoiceCommands({
+const { listening, supported, transcript, voiceStatus, start, testMicrophone, stopMicrophoneTest, refreshMicrophoneState } = useVoiceCommands({
   upload: () => {
     activeView.value = 'library'
     status.message = '已切换到资料上传，请点击上传区域选择课程资料。'
@@ -175,6 +175,7 @@ onMounted(async () => {
   await refreshDocuments()
   await refreshChapters()
   await loadWrongs()
+  await refreshMicrophoneState()
 })
 
 watch(
@@ -555,7 +556,7 @@ function applyProviderDefaults() {
         <div class="voice-diagnostics">
           <article>
             <strong>麦克风权限</strong>
-            <span>{{ voiceStatus.permission }}</span>
+            <span>{{ voiceStatus.permission }} · {{ voiceStatus.deviceText }}</span>
           </article>
           <article>
             <strong>输入音量</strong>
@@ -572,9 +573,11 @@ function applyProviderDefaults() {
           </article>
         </div>
         <div class="command-grid">
+          <span>上传资料</span>
           <span>生成大纲</span>
           <span>开始测验</span>
           <span>查看错题</span>
+          <span>模型设置</span>
           <span>切换 mock 模型</span>
         </div>
       </section>

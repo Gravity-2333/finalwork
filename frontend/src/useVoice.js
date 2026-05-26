@@ -20,7 +20,8 @@ export function useVoiceCommands(handlers) {
     lastText: '',
     matchedCommand: '',
     diagnostic: supported ? '点击开始语音识别或麦克风测试。' : '浏览器不支持 Web Speech API。',
-    testingMicrophone: false
+    testingMicrophone: false,
+    deviceText: '未检测'
   })
 
   let recognition = null
@@ -30,6 +31,8 @@ export function useVoiceCommands(handlers) {
   let audioStream = null
   let audioTimer = null
   let audioStopTimer = null
+
+  refreshMicrophoneState()
 
   function start() {
     if (!supported) return
@@ -115,6 +118,7 @@ export function useVoiceCommands(handlers) {
       voiceStatus.diagnostic = '麦克风测试正在进行。'
       return
     }
+    if (listening.value) stop(false)
     if (!navigator.mediaDevices?.getUserMedia) {
       voiceStatus.permission = '不可用'
       voiceStatus.diagnostic = '当前环境不支持麦克风访问。'
@@ -123,10 +127,26 @@ export function useVoiceCommands(handlers) {
     try {
       stopMicrophoneTest()
       voiceStatus.testingMicrophone = true
-      audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      voiceStatus.permission = '请求中'
+      voiceStatus.volume = 0
+      voiceStatus.volumeText = '等待输入'
+      voiceStatus.diagnostic = '正在请求浏览器麦克风权限。'
+      await refreshMicrophoneState()
+      audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      })
+      await refreshMicrophoneState()
       voiceStatus.permission = '已授权'
       const AudioContextClass = window.AudioContext || window.webkitAudioContext
+      if (!AudioContextClass) {
+        throw new Error('当前浏览器不支持 AudioContext，无法读取麦克风音量。')
+      }
       audioContext = new AudioContextClass()
+      if (audioContext.state === 'suspended') await audioContext.resume()
       const source = audioContext.createMediaStreamSource(audioStream)
       const analyser = audioContext.createAnalyser()
       analyser.fftSize = 2048
@@ -142,11 +162,11 @@ export function useVoiceCommands(handlers) {
         voiceStatus.diagnostic = volume < 8 ? '麦克风已授权，但声音偏小或没有输入。' : '麦克风有输入，若仍无法识别，多半是语音识别服务或环境问题。'
       }, 180)
       audioStopTimer = setTimeout(stopMicrophoneTest, 8000)
-    } catch {
+    } catch (error) {
+      stopMicrophoneTest()
       voiceStatus.testingMicrophone = false
-      voiceStatus.permission = '未授权'
       voiceStatus.volumeText = '无法测试'
-      voiceStatus.diagnostic = '未获得麦克风权限，请检查浏览器权限或系统输入设备。'
+      applyMicrophoneError(error)
     }
   }
 
@@ -154,7 +174,7 @@ export function useVoiceCommands(handlers) {
     if (audioStopTimer) clearTimeout(audioStopTimer)
     if (audioTimer) clearInterval(audioTimer)
     if (audioStream) audioStream.getTracks().forEach((track) => track.stop())
-    if (audioContext?.state !== 'closed') audioContext.close().catch?.(() => {})
+    if (audioContext && audioContext.state !== 'closed') audioContext.close().catch?.(() => {})
     voiceStatus.testingMicrophone = false
     audioStopTimer = null
     audioTimer = null
@@ -171,5 +191,64 @@ export function useVoiceCommands(handlers) {
     handlers[command.action]?.()
   }
 
-  return { listening, supported, transcript, voiceStatus, start, stop, testMicrophone, stopMicrophoneTest }
+  async function refreshMicrophoneState() {
+    if (!navigator.mediaDevices?.enumerateDevices) return
+    try {
+      const permission = await queryMicrophonePermission()
+      if (permission) voiceStatus.permission = permission
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const audioInputs = devices.filter((device) => device.kind === 'audioinput')
+      voiceStatus.deviceText = audioInputs.length ? `${audioInputs.length} 个输入设备` : '未发现输入设备'
+      if (!audioInputs.length && voiceStatus.permission !== '已拒绝') {
+        voiceStatus.diagnostic = '浏览器未发现麦克风输入设备，请检查系统默认输入设备。'
+      }
+    } catch {
+      voiceStatus.deviceText = '无法检测'
+    }
+  }
+
+  async function queryMicrophonePermission() {
+    if (!navigator.permissions?.query) return ''
+    try {
+      const status = await navigator.permissions.query({ name: 'microphone' })
+      if (status.state === 'granted') return '浏览器已允许'
+      if (status.state === 'denied') return '浏览器已拒绝'
+      return '浏览器待授权'
+    } catch {
+      return ''
+    }
+  }
+
+  function applyMicrophoneError(error) {
+    const name = error?.name || ''
+    if (name === 'NotAllowedError' || name === 'SecurityError') {
+      voiceStatus.permission = '浏览器已拒绝'
+      voiceStatus.diagnostic = '浏览器站点权限未允许麦克风。请点击地址栏左侧图标，允许当前站点使用麦克风后刷新页面。'
+      return
+    }
+    if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      voiceStatus.permission = '未发现设备'
+      voiceStatus.diagnostic = '系统允许浏览器使用麦克风，但浏览器没有发现可用输入设备。请检查默认输入设备或重新插拔麦克风。'
+      return
+    }
+    if (name === 'NotReadableError' || name === 'TrackStartError') {
+      voiceStatus.permission = '设备不可读'
+      voiceStatus.diagnostic = '麦克风可能被其他程序占用，或驱动暂时不可读。请关闭占用麦克风的软件后重试。'
+      return
+    }
+    if (name === 'OverconstrainedError') {
+      voiceStatus.permission = '约束不支持'
+      voiceStatus.diagnostic = '当前麦克风不支持浏览器请求的音频参数，请切换输入设备后重试。'
+      return
+    }
+    if (name === 'AbortError') {
+      voiceStatus.permission = '设备中断'
+      voiceStatus.diagnostic = '麦克风访问被系统中断，请重新点击麦克风测试。'
+      return
+    }
+    voiceStatus.permission = '测试失败'
+    voiceStatus.diagnostic = error?.message || '麦克风测试失败，请检查浏览器站点权限、系统输入设备和设备占用情况。'
+  }
+
+  return { listening, supported, transcript, voiceStatus, start, stop, testMicrophone, stopMicrophoneTest, refreshMicrophoneState }
 }
