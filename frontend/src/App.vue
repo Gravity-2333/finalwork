@@ -167,20 +167,20 @@ const nextAction = computed(() => {
   }
   if (!chapters.value.length) {
     return {
-      title: '生成课程大纲',
-      description: '根据知识库创建 4 个章节，形成清晰的学习路径。',
-      action: '生成大纲',
-      view: 'study',
-      task: 'outline'
+      title: '初始化课程',
+      description: '确认资料上传完成后，一次生成大纲、章节内容和测验。',
+      action: '开始初始化',
+      view: 'library',
+      task: 'initialize'
     }
   }
   if (!chapters.value.some((chapter) => chapter.content)) {
     return {
-      title: '生成章节学习内容',
-      description: '为当前章节生成结构化 Markdown 学习材料。',
-      action: '生成内容',
-      view: 'study',
-      task: 'content'
+      title: '继续初始化课程',
+      description: '当前课程还缺少章节内容，点击后补齐内容和测验。',
+      action: '继续初始化',
+      view: 'library',
+      task: 'initialize'
     }
   }
   if (!quizzes.value.length || !result.value) {
@@ -261,6 +261,11 @@ const { listening, supported, transcript, voiceStatus, start, testMicrophone, st
     status.message = '已打开系统设置。'
     return { message: '已打开系统设置。' }
   },
+  initialize: () => {
+    if (!documents.value.length) return voiceGuard('请先上传课程资料，再初始化课程。', 'library')
+    void initializeCourse()
+    return { message: '正在初始化课程。' }
+  },
   providerTest: () => {
     activeView.value = 'settings'
     void runProviderTest()
@@ -305,7 +310,7 @@ const voiceModeText = computed(() => (listening.value ? '正在监听' : voiceSt
 const voiceDetail = computed(() => (voiceStatus.diagnostic === transcript.value ? '' : voiceStatus.diagnostic))
 const recommendedVoiceCommands = computed(() =>
   VOICE_COMMAND_GROUPS.flatMap((group) => group.items).filter((command) =>
-    ['上传资料', '生成课程大纲', '开始测验', '查看错题', '模型设置', '麦克风测试'].includes(command.name)
+    ['上传资料', '初始化课程', '开始测验', '查看错题', '模型设置', '麦克风测试'].includes(command.name)
   )
 )
 const filteredVoiceGroups = computed(() => {
@@ -450,25 +455,34 @@ async function handleUpload(event) {
     status.message = `已入库 ${documents.length} 个资料，共 ${totalChunks} 个片段。`
     status.warning = errors.length ? `部分文件未入库：${errors.map((item) => `${item.filename} ${item.message}`).join('；')}` : ''
     await refreshDocuments()
-    if (documents.length) await bootstrapCourseAfterUpload()
+    if (documents.length) {
+      activeView.value = 'library'
+      status.message = `${status.message} 请确认资料无误后点击“完成上传并初始化课程”。`
+    }
   }
 }
 
-async function bootstrapCourseAfterUpload() {
+async function initializeCourse() {
+  if (!uniqueDocuments.value.length) {
+    status.warning = '请先上传课程资料，再初始化课程。'
+    activeView.value = 'library'
+    return
+  }
+  if (chapters.value.length) {
+    const confirmed = window.confirm('重新初始化会基于当前资料重建大纲、章节内容和测验，并清空已有测验记录。确认继续？')
+    if (!confirmed) return
+  }
   courseBootstrapping.value = true
   status.loading = true
   activeView.value = 'study'
   try {
-    status.message = '资料已入库，正在检查学习路径。'
-    let currentChapters = [...chapters.value]
-    if (!currentChapters.length) {
-      status.message = '正在生成课程大纲。'
-      const outline = await createOutline(providerPayload())
-      if (outline?.warning) status.warning = outline.warning
-      currentChapters = outline?.chapters || []
-      chapters.value = currentChapters
-      selectedChapterId.value = currentChapters[0]?.id || null
-    }
+    status.message = '正在根据当前资料初始化课程。'
+    status.message = '正在生成课程大纲。'
+    const outline = await createOutline(providerPayload())
+    if (outline?.warning) status.warning = outline.warning
+    let currentChapters = outline?.chapters || []
+    chapters.value = currentChapters
+    selectedChapterId.value = currentChapters[0]?.id || null
     for (let index = 0; index < currentChapters.length; index += 1) {
       const chapter = currentChapters[index]
       if (!chapter.content) {
@@ -541,6 +555,8 @@ async function handleNextAction() {
   activeView.value = nextAction.value.view
   if (nextAction.value.task === 'outline') {
     await generateOutline()
+  } else if (nextAction.value.task === 'initialize') {
+    await initializeCourse()
   } else if (nextAction.value.task === 'content') {
     if (!selectedChapterId.value && chapters.value[0]) selectedChapterId.value = chapters.value[0].id
     if (selectedChapter.value) await generateContent(selectedChapter.value)
@@ -760,6 +776,7 @@ function applyProviderDefaults() {
         @upload="handleUpload"
         @delete="removeDocument"
         @clear="removeAllDocuments"
+        @initialize="initializeCourse"
       />
       <StudyPanel
         v-if="activeView === 'study'"

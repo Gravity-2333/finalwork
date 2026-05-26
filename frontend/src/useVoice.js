@@ -8,6 +8,7 @@ const COMMANDS = [
   { name: '查看错题', keywords: ['查看错题', '错题', '复盘'], action: 'wrong', type: 'navigate', description: '跳转到错题归档。' },
   { name: '模型设置', keywords: ['模型设置', '模型配置'], action: 'settings', type: 'navigate', description: '打开模型 Provider 配置。' },
   { name: '系统设置', keywords: ['系统设置', '提示词设置', '打开设置'], action: 'systemSettings', type: 'navigate', description: '打开资料处理和提示词设置。' },
+  { name: '初始化课程', keywords: ['初始化课程', '完成上传', '开始初始化', '生成全部内容'], action: 'initialize', type: 'execute', description: '确认资料后生成大纲、章节内容和测验。' },
   { name: '生成课程大纲', keywords: ['生成大纲', '生成课程大纲', '创建大纲'], action: 'outline', type: 'execute', description: '有资料时自动生成学习大纲。' },
   { name: '生成章节内容', keywords: ['生成章节', '生成内容', '学习内容'], action: 'content', type: 'execute', description: '为当前章节生成学习内容。' },
   { name: '开始测验', keywords: ['开始测验', '生成测验', '开始考试', '出题'], action: 'quiz', type: 'execute', description: '为当前章节生成测验题。' },
@@ -37,6 +38,7 @@ export function useVoiceCommands(handlers) {
     matchedCommand: '',
     diagnostic: supported ? '点击开始语音识别或麦克风测试。' : '浏览器不支持 Web Speech API。',
     testingMicrophone: false,
+    inputMonitoring: false,
     deviceText: '未检测'
   })
 
@@ -64,8 +66,16 @@ export function useVoiceCommands(handlers) {
     listening.value = true
     lastFinalText = ''
     lastRecognizedText = ''
+    voiceStatus.matchedCommand = ''
+    voiceStatus.volume = 0
+    voiceStatus.volumeText = '等待输入'
     transcript.value = '正在聆听，请说出命令...'
-    voiceStatus.diagnostic = '正在监听，识别到命令会自动停止并执行。'
+    voiceStatus.diagnostic = '正在监听并检测音量，识别到命令会自动停止并执行。'
+    if (voiceStatus.testingMicrophone) stopMicrophoneTest()
+    void startInputMonitor('listen').catch((error) => {
+      applyMicrophoneError(error)
+      voiceStatus.diagnostic = `${voiceStatus.diagnostic} 语音识别仍会尝试启动，但无法显示实时音量。`
+    })
     recognition.onresult = (event) => {
       let interim = ''
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
@@ -96,10 +106,12 @@ export function useVoiceCommands(handlers) {
       transcript.value = reason
       voiceStatus.diagnostic = reason
       listening.value = false
+      stopInputMonitor()
     }
     recognition.onend = () => {
       listening.value = false
       recognition = null
+      stopInputMonitor()
     }
     try {
       recognition.start()
@@ -107,6 +119,7 @@ export function useVoiceCommands(handlers) {
       listening.value = false
       transcript.value = '语音识别启动失败，请稍后重试。'
       voiceStatus.diagnostic = '语音识别启动失败，可能是浏览器正在占用识别会话。'
+      stopInputMonitor()
     }
   }
 
@@ -127,6 +140,7 @@ export function useVoiceCommands(handlers) {
     if (recognition) recognition.stop()
     listening.value = false
     transcript.value = textToProcess || '语音已停止'
+    stopInputMonitor()
   }
 
   async function testMicrophone() {
@@ -148,36 +162,7 @@ export function useVoiceCommands(handlers) {
       voiceStatus.volumeText = '等待输入'
       voiceStatus.diagnostic = '正在请求浏览器麦克风权限。'
       await refreshMicrophoneState()
-      audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      })
-      await refreshMicrophoneState()
-      voiceStatus.permission = '已授权'
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext
-      if (!AudioContextClass) {
-        throw new Error('当前浏览器不支持 AudioContext，无法读取麦克风音量。')
-      }
-      audioContext = new AudioContextClass()
-      if (audioContext.state === 'suspended') await audioContext.resume()
-      const source = audioContext.createMediaStreamSource(audioStream)
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = 2048
-      source.connect(analyser)
-      const data = new Uint8Array(analyser.fftSize)
-      clearInterval(audioTimer)
-      audioTimer = setInterval(() => {
-        analyser.getByteTimeDomainData(data)
-        const rms = Math.sqrt(data.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / data.length)
-        const volume = Math.min(100, Math.round(rms * 260))
-        voiceStatus.volume = volume
-        voiceStatus.volumeText = volume < 8 ? '音量偏低' : volume < 25 ? '音量正常' : '音量清晰'
-        voiceStatus.diagnostic = volume < 8 ? '麦克风已授权，但声音偏小或没有输入。' : '麦克风有输入，若仍无法识别，多半是语音识别服务或环境问题。'
-      }, 180)
-      audioStopTimer = setTimeout(stopMicrophoneTest, 8000)
+      await startInputMonitor('test', 8000)
     } catch (error) {
       stopMicrophoneTest()
       voiceStatus.testingMicrophone = false
@@ -187,11 +172,56 @@ export function useVoiceCommands(handlers) {
   }
 
   function stopMicrophoneTest() {
+    stopInputMonitor()
+    voiceStatus.testingMicrophone = false
+  }
+
+  async function startInputMonitor(mode = 'listen', autoStopMs = 0) {
+    stopInputMonitor()
+    audioStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    })
+    await refreshMicrophoneState()
+    voiceStatus.permission = '已授权'
+    voiceStatus.inputMonitoring = true
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext
+    if (!AudioContextClass) {
+      throw new Error('当前浏览器不支持 AudioContext，无法读取麦克风音量。')
+    }
+    audioContext = new AudioContextClass()
+    if (audioContext.state === 'suspended') await audioContext.resume()
+    const source = audioContext.createMediaStreamSource(audioStream)
+    const analyser = audioContext.createAnalyser()
+    analyser.fftSize = 2048
+    source.connect(analyser)
+    const data = new Uint8Array(analyser.fftSize)
+    audioTimer = setInterval(() => {
+      analyser.getByteTimeDomainData(data)
+      const rms = Math.sqrt(data.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / data.length)
+      const volume = Math.min(100, Math.round(rms * 260))
+      voiceStatus.volume = volume
+      voiceStatus.volumeText = volume < 8 ? '音量偏低' : volume < 25 ? '音量正常' : '音量清晰'
+      if (mode === 'test') {
+        voiceStatus.diagnostic = volume < 8 ? '麦克风已授权，但声音偏小或没有输入。' : '麦克风有输入，若仍无法识别，多半是语音识别服务或环境问题。'
+      } else if (volume < 8) {
+        voiceStatus.diagnostic = '正在监听，但当前音量偏低；请靠近麦克风或提高音量。'
+      } else {
+        voiceStatus.diagnostic = '麦克风有输入，正在等待浏览器返回识别文本。'
+      }
+    }, 180)
+    if (autoStopMs) audioStopTimer = setTimeout(stopMicrophoneTest, autoStopMs)
+  }
+
+  function stopInputMonitor() {
     if (audioStopTimer) clearTimeout(audioStopTimer)
     if (audioTimer) clearInterval(audioTimer)
     if (audioStream) audioStream.getTracks().forEach((track) => track.stop())
     if (audioContext && audioContext.state !== 'closed') audioContext.close().catch?.(() => {})
-    voiceStatus.testingMicrophone = false
+    voiceStatus.inputMonitoring = false
     audioStopTimer = null
     audioTimer = null
     audioStream = null

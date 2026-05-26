@@ -1,12 +1,12 @@
 <script setup>
-import { Database, FileUp, UploadCloud, Trash2 } from 'lucide-vue-next'
+import { Database, FileUp, PlayCircle, UploadCloud, Trash2 } from 'lucide-vue-next'
 
 defineProps({
   documents: { type: Array, default: () => [] },
   loading: Boolean
 })
 
-const emit = defineEmits(['upload', 'delete', 'clear'])
+const emit = defineEmits(['upload', 'delete', 'clear', 'initialize'])
 
 function onUpload(event) {
   emit('upload', event)
@@ -19,7 +19,7 @@ function onUpload(event) {
       <Database :size="19" />
       <div>
         <h2>知识库</h2>
-        <p>上传后自动切分并入库</p>
+        <p>先整理资料，确认后再初始化课程</p>
       </div>
       <button class="icon-action" :disabled="loading || !documents.length" title="清空资料库" @click="$emit('clear')">
         <Trash2 :size="16" />
@@ -31,6 +31,13 @@ function onUpload(event) {
       <span>选择文件上传</span>
       <small>txt / md / docx / pdf · 单批 20 个 · 单个 25MB</small>
     </label>
+    <div class="library-actions">
+      <button class="primary" :disabled="loading || !documents.length" @click="$emit('initialize')">
+        <PlayCircle :size="16" />
+        完成上传并初始化课程
+      </button>
+      <small>点击后会生成大纲、章节内容和测验。</small>
+    </div>
     <div class="doc-list">
       <article v-for="doc in documents" :key="doc.id">
         <div>

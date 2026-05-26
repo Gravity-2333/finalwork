@@ -642,6 +642,22 @@ h1 {
   color: #718096;
 }
 
+.library-actions {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.library-actions .primary {
+  width: 100%;
+}
+
+.library-actions small {
+  color: var(--color-weak);
+  font-size: 13px;
+  text-align: center;
+}
+
 .doc-list,
 .chapter-grid,
 .quiz-list,
