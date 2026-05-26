@@ -29,11 +29,11 @@ Provider = Literal["local_ollama", "cloud_ollama", "openai_compatible", "mock"]
 
 
 class ProviderConfig(BaseModel):
-    provider: Provider = "mock"
-    model: str = ""
-    base_url: str = ""
+    provider: Provider = "openai_compatible"
+    model: str = "deepseek-chat"
+    base_url: str = "https://api.deepseek.com/v1"
     api_key: str = ""
-    api_key_env: str = ""
+    api_key_env: str = "DEEPSEEK_API_KEY"
     langsmith_enabled: bool = False
     prompt_templates: dict[str, str] = {}
 

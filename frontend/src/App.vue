@@ -38,12 +38,12 @@ const status = reactive({
 })
 
 const config = reactive({
-  provider: 'mock',
-  model: '',
-  base_url: '',
+  provider: 'openai_compatible',
+  model: 'deepseek-chat',
+  base_url: 'https://api.deepseek.com/v1',
   key_mode: 'env',
   api_key: '',
-  api_key_env: '',
+  api_key_env: 'DEEPSEEK_API_KEY',
   langsmith_enabled: false
 })
 

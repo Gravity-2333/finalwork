@@ -168,8 +168,11 @@ def _summarize_chunks(chunks: list[Document]) -> str:
 def clean_preview_text(text: str) -> str:
     cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", text or "")
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
-    cleaned = re.sub(r"[^\w\u4e00-\u9fff，。！？、；：,.!?;:()（）《》“”\"'\-\s/%]+", " ", cleaned)
+    cleaned = re.sub(r"[^A-Za-z0-9_\u4e00-\u9fff，。！？、；：,.!?;:()（）《》“”\"'\-\s/%]+", " ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    first_cjk = re.search(r"[\u4e00-\u9fff]", cleaned)
+    if first_cjk and first_cjk.start() > 16 and is_fragmented_prefix(cleaned[: first_cjk.start()]):
+        cleaned = cleaned[first_cjk.start() :].strip()
     preview = cleaned[:240].strip()
     if is_probably_garbled(preview):
         return "资料已入库，部分 PDF 页面可能因扫描件或字体编码导致预览不可读，但系统会尽量使用可提取文本生成学习内容。"
@@ -181,12 +184,25 @@ def is_probably_garbled(text: str) -> bool:
         return True
     if text.count("�") >= 3:
         return True
-    readable = re.findall(r"[\w\u4e00-\u9fff，。！？、；：,.!?;:()（）《》“”\"'\-\s/%]", text)
+    readable = re.findall(r"[A-Za-z0-9_\u4e00-\u9fff，。！？、；：,.!?;:()（）《》“”\"'\-\s/%]", text)
     readable_ratio = len(readable) / max(len(text), 1)
-    cjk_or_word = re.findall(r"[\w\u4e00-\u9fff]", text)
+    cjk_or_word = re.findall(r"[A-Za-z0-9_\u4e00-\u9fff]", text)
     content_ratio = len(cjk_or_word) / max(len(text), 1)
-    abnormal_runs = re.search(r"[^\w\u4e00-\u9fff\s]{8,}", text)
-    return readable_ratio < 0.72 or content_ratio < 0.25 or bool(abnormal_runs)
+    abnormal_runs = re.search(r"[^A-Za-z0-9_\u4e00-\u9fff\s]{8,}", text)
+    tokens = re.findall(r"[A-Za-z0-9_\u4e00-\u9fff]+", text)
+    short_tokens = [token for token in tokens if len(token) <= 2]
+    cjk_chars = re.findall(r"[\u4e00-\u9fff]", text)
+    short_token_ratio = len(short_tokens) / max(len(tokens), 1)
+    fragmented_latin = len(tokens) >= 12 and short_token_ratio > 0.6 and len(cjk_chars) < 12
+    return readable_ratio < 0.72 or content_ratio < 0.25 or bool(abnormal_runs) or fragmented_latin
+
+
+def is_fragmented_prefix(text: str) -> bool:
+    tokens = re.findall(r"[A-Za-z0-9_]+", text)
+    if len(tokens) < 6:
+        return False
+    short_tokens = [token for token in tokens if len(token) <= 2]
+    return len(short_tokens) / max(len(tokens), 1) > 0.55
 
 
 def _clear_learning_state(conn) -> None:
