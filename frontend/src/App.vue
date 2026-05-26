@@ -673,6 +673,7 @@ async function loadCloudModels() {
 }
 
 function providerPayload() {
+  ensurePromptCompatibility()
   return {
     provider: config.provider,
     model: config.model,
@@ -685,6 +686,15 @@ function providerPayload() {
       chapter: appSettings.prompts.chapter,
       quiz: appSettings.prompts.quiz
     }
+  }
+}
+
+function ensurePromptCompatibility() {
+  if (!appSettings.prompts.outline.includes('{{chapter_count}}')) {
+    appSettings.prompts.outline = defaultPrompts.outline
+  }
+  if (/生成\s*3\s*道|3\s*道单选题/.test(appSettings.prompts.quiz)) {
+    appSettings.prompts.quiz = defaultPrompts.quiz
   }
 }
 

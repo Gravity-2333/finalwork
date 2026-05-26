@@ -337,6 +337,8 @@ def _generate(state: AssistantState) -> AssistantState:
 
 def _render_prompt(template: str | None, key: str, values: dict[str, str]) -> str:
     text = (template or "").strip() or DEFAULT_PROMPTS[key]
+    if key == "outline" and "{{chapter_count}}" not in text:
+        text = DEFAULT_PROMPTS[key]
     for name, value in values.items():
         text = text.replace(f"{{{{{name}}}}}", value or "")
     return text
@@ -413,9 +415,16 @@ def _parse_outline(text: str, expected_count: int = 6) -> list[dict]:
         chapters.append({"title": title.strip()[:40], "objective": objective.strip()[:120]})
         if len(chapters) == expected_count:
             break
-    if len(chapters) < max(4, min(expected_count, 6)):
-        chapters = fallback_outline(expected_count)
-    return chapters
+    if len(chapters) < expected_count:
+        existing_titles = {item["title"] for item in chapters}
+        for item in fallback_outline(expected_count):
+            if item["title"] in existing_titles:
+                continue
+            chapters.append(item)
+            existing_titles.add(item["title"])
+            if len(chapters) == expected_count:
+                break
+    return chapters[:expected_count]
 
 
 def _parse_quiz(text: str, chapter: dict) -> list[dict]:
