@@ -116,6 +116,9 @@ def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str
     stats = knowledge_stats()
     source_chapters = document_outline_chapters()
     chapter_count = len(source_chapters) if len(source_chapters) >= 4 else estimate_outline_size(stats["total_chunks"], stats["total_chars"])
+    if len(source_chapters) >= 4:
+        _replace_outline(source_chapters[:chapter_count])
+        return {"chapters": list_chapters(), "warning": ""}
     state = _graph().invoke(
         {
             "task": "outline",
@@ -129,6 +132,11 @@ def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str
         }
     )
     chapters = _merge_outline_with_source(_parse_outline(state["result"], chapter_count), source_chapters, chapter_count)
+    _replace_outline(chapters)
+    return {"chapters": list_chapters(), "warning": state.get("warning", "")}
+
+
+def _replace_outline(chapters: list[dict]) -> None:
     with connect() as conn:
         conn.execute("DELETE FROM chapters")
         conn.execute("DELETE FROM quizzes")
@@ -137,7 +145,6 @@ def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str
             "INSERT INTO chapters(title, objective, content) VALUES (?, ?, '')",
             [(item["title"], item["objective"]) for item in chapters],
         )
-    return {"chapters": list_chapters(), "warning": state.get("warning", "")}
 
 
 def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "", prompt_templates: dict[str, str] | None = None) -> dict:
