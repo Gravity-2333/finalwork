@@ -301,7 +301,7 @@ h1 {
 
 .provider-panel {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
   gap: 14px 18px;
   padding: 16px;
   background: #fff;
@@ -320,9 +320,8 @@ h1 {
 .runtime-state small {
   grid-column: 2;
   color: #64748b;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .state-dot {
@@ -365,8 +364,23 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
-  white-space: nowrap;
-  padding-bottom: 8px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid #cfdbea;
+  border-radius: 8px;
+  background: #f9fbfe;
+}
+
+.provider-panel .toggle span {
+  display: grid;
+  gap: 2px;
+  color: #27364b;
+  line-height: 1.25;
+}
+
+.provider-panel .toggle small {
+  color: #718096;
+  font-size: 12px;
 }
 
 .provider-panel input[type="checkbox"] {

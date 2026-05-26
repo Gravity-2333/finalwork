@@ -74,7 +74,10 @@ const showCloudModels = computed(() => props.config.provider === 'cloud_ollama' 
 
       <label class="toggle">
         <input v-model="config.langsmith_enabled" type="checkbox" />
-        追踪
+        <span>
+          LangSmith 追踪
+          <small>仅在填写 LANGSMITH_API_KEY 后记录调用链路</small>
+        </span>
       </label>
 
       <button v-if="config.provider === 'cloud_ollama'" :disabled="cloudLoading" @click="$emit('load-cloud-models')">
