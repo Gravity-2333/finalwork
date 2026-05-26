@@ -332,13 +332,13 @@ async function verifyFace(payload) {
     faceProfileState.username = data.username
     faceReplaceToken.value = data.replace_token || ''
     status.message = Object.prototype.hasOwnProperty.call(data, 'distance')
-      ? `人脸识别通过，距离 ${data.distance} / 阈值 ${data.threshold}，可以开始学习。`
+      ? data.message || `人脸识别通过，模型距离 ${data.distance} / 阈值 ${data.threshold}，可以开始学习。`
       : `人脸识别通过，相似度 ${data.similarity}，可以开始学习。`
   } else if (data) {
     face.ok = false
     faceReplaceToken.value = ''
     status.warning = data.distance
-      ? `人脸比对未通过，距离 ${data.distance} / 阈值 ${data.threshold}。`
+      ? data.message || `人脸比对未通过，模型距离 ${data.distance} / 阈值 ${data.threshold}。`
       : data.message || '人脸比对未通过，请使用已录入账号本人登录。'
   }
 }

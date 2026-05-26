@@ -9,6 +9,8 @@ from .database import connect
 
 DEFAULT_COSINE_THRESHOLD = 0.86
 DEFAULT_FACEAPI_DISTANCE_THRESHOLD = 0.38
+STRONG_FACEAPI_PASS_THRESHOLD = 0.30
+WEAK_HASH_DISTANCE_THRESHOLD = 0.52
 DEFAULT_HASH_DISTANCE_THRESHOLD = 0.34
 FACE_DESCRIPTOR_LENGTH = 128
 HASH_DESCRIPTOR_LENGTH = 256
@@ -67,15 +69,16 @@ def verify_face(username: str, descriptor: list[float]) -> dict:
     if len(probe) in {FACE_DESCRIPTOR_LENGTH, COMPOSITE_DESCRIPTOR_LENGTH}:
         face_distance = _euclidean_distance(_face_part(enrolled), _face_part(probe))
         hash_distance = _hash_distance(enrolled, probe) if len(probe) == COMPOSITE_DESCRIPTOR_LENGTH else None
-        if face_distance > threshold or (hash_distance is not None and hash_distance > DEFAULT_HASH_DISTANCE_THRESHOLD):
+        passed, decision = _faceapi_auth_passed(face_distance, threshold, hash_distance)
+        if not passed:
             return {
                 "ok": False,
                 "username": username,
                 "distance": round(face_distance, 4),
                 "threshold": threshold,
                 "hash_distance": round(hash_distance, 4) if hash_distance is not None else None,
-                "hash_threshold": DEFAULT_HASH_DISTANCE_THRESHOLD if hash_distance is not None else None,
-                "metric": "face_distance+hash_distance" if hash_distance is not None else "euclidean_distance",
+                "hash_threshold": _hash_threshold_for_display(face_distance, threshold, hash_distance),
+                "metric": decision,
                 "message": _failure_message(face_distance, threshold, hash_distance),
             }
         return {
@@ -84,10 +87,10 @@ def verify_face(username: str, descriptor: list[float]) -> dict:
             "distance": round(face_distance, 4),
             "threshold": threshold,
             "hash_distance": round(hash_distance, 4) if hash_distance is not None else None,
-            "hash_threshold": DEFAULT_HASH_DISTANCE_THRESHOLD if hash_distance is not None else None,
-            "metric": "face_distance+hash_distance" if hash_distance is not None else "euclidean_distance",
+            "hash_threshold": _hash_threshold_for_display(face_distance, threshold, hash_distance),
+            "metric": decision,
             "replace_token": _create_face_session(username),
-            "message": "人脸识别通过，已进入 AI 学习助手。",
+            "message": _success_message(face_distance, threshold, hash_distance, decision),
         }
     similarity = _cosine_similarity(enrolled, probe)
     if similarity < threshold:
@@ -154,11 +157,47 @@ def _hash_distance(left: list[float], right: list[float]) -> float | None:
     return sum(1 for left_bit, right_bit in zip(left_hash, right_hash) if round(left_bit) != round(right_bit)) / HASH_DESCRIPTOR_LENGTH
 
 
+def _faceapi_auth_passed(face_distance: float, face_threshold: float, hash_distance: float | None) -> tuple[bool, str]:
+    if face_distance > face_threshold:
+        return False, "face_distance"
+    if hash_distance is None:
+        return True, "face_distance"
+    if face_distance <= STRONG_FACEAPI_PASS_THRESHOLD:
+        return True, "face_distance_strong_hash_reference"
+    if hash_distance <= DEFAULT_HASH_DISTANCE_THRESHOLD:
+        return True, "face_distance+hash_distance"
+    if face_distance <= face_threshold * 0.92 and hash_distance <= WEAK_HASH_DISTANCE_THRESHOLD:
+        return True, "face_distance_hash_weak_reference"
+    return False, "face_distance+hash_distance"
+
+
+def _hash_threshold_for_display(face_distance: float, face_threshold: float, hash_distance: float | None) -> float | None:
+    if hash_distance is None:
+        return None
+    if face_distance <= STRONG_FACEAPI_PASS_THRESHOLD:
+        return WEAK_HASH_DISTANCE_THRESHOLD
+    if face_distance <= face_threshold * 0.92:
+        return WEAK_HASH_DISTANCE_THRESHOLD
+    return DEFAULT_HASH_DISTANCE_THRESHOLD
+
+
 def _failure_message(face_distance: float, face_threshold: float, hash_distance: float | None) -> str:
     message = f"人脸比对未通过，模型距离 {round(face_distance, 4)} / 阈值 {face_threshold}"
     if hash_distance is not None:
-        message += f"，灰度模板差异 {round(hash_distance, 4)} / 阈值 {DEFAULT_HASH_DISTANCE_THRESHOLD}"
+        message += f"，灰度模板差异 {round(hash_distance, 4)} / 阈值 {_hash_threshold_for_display(face_distance, face_threshold, hash_distance)}"
     return message + "。"
+
+
+def _success_message(face_distance: float, face_threshold: float, hash_distance: float | None, decision: str) -> str:
+    message = f"人脸识别通过，模型距离 {round(face_distance, 4)} / 阈值 {face_threshold}"
+    if hash_distance is None:
+        return message + "。"
+    hash_threshold = _hash_threshold_for_display(face_distance, face_threshold, hash_distance)
+    if decision == "face_distance_strong_hash_reference":
+        return message + f"，灰度模板差异 {round(hash_distance, 4)} / 参考阈值 {hash_threshold}，本次以深度人脸特征为主。"
+    if decision == "face_distance_hash_weak_reference":
+        return message + f"，灰度模板差异 {round(hash_distance, 4)} / 宽松参考阈值 {hash_threshold}。"
+    return message + f"，灰度模板差异 {round(hash_distance, 4)} / 阈值 {hash_threshold}。"
 
 
 def _create_face_session(username: str) -> str:
