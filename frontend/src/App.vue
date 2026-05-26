@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { BookOpen, FolderOpen, MessageCircle, Mic, Settings, Trophy } from 'lucide-vue-next'
+import { Activity, BookOpen, CheckCircle2, Compass, FolderOpen, MessageCircle, Mic, Radio, Settings, Trophy } from 'lucide-vue-next'
 import DashboardMetrics from './components/DashboardMetrics.vue'
 import FaceGate from './components/FaceGate.vue'
 import HeroHeader from './components/HeroHeader.vue'
@@ -27,7 +27,7 @@ import {
   testProvider,
   uploadDocuments
 } from './api'
-import { useVoiceCommands } from './useVoice'
+import { useVoiceCommands, VOICE_COMMAND_GROUPS } from './useVoice'
 
 const status = reactive({
   loading: false,
@@ -149,23 +149,97 @@ const { listening, supported, transcript, voiceStatus, start, testMicrophone, st
   upload: () => {
     activeView.value = 'library'
     status.message = '已切换到资料上传，请点击上传区域选择课程资料。'
+    return { message: '已打开资料上传。' }
   },
-  outline: generateOutline,
-  quiz: generateQuizForSelected,
+  library: () => {
+    activeView.value = 'library'
+    status.message = '已切换到知识库。'
+    return { message: '已打开知识库。' }
+  },
+  study: () => {
+    activeView.value = 'study'
+    status.message = '已切换到学习路径。'
+    return { message: '已打开学习路径。' }
+  },
+  quizPage: () => {
+    activeView.value = 'quiz'
+    status.message = '已切换到测验复盘。'
+    return { message: '已打开测验复盘。' }
+  },
+  outline: () => {
+    if (!documents.value.length) return voiceGuard('请先上传课程资料，才能生成课程大纲。', 'library')
+    void generateOutline()
+    return { message: '正在生成课程大纲。' }
+  },
+  content: () => {
+    if (!chapters.value.length) return voiceGuard('请先生成课程大纲，再生成章节内容。', 'study')
+    if (!selectedChapter.value) return voiceGuard('请先选择一个章节。', 'study')
+    void generateContent(selectedChapter.value)
+    return { message: `正在生成《${selectedChapter.value.title}》学习内容。` }
+  },
+  quiz: () => {
+    if (!chapters.value.length) return voiceGuard('请先生成课程大纲，再开始测验。', 'study')
+    if (!selectedChapter.value) return voiceGuard('请先选择一个章节，再开始测验。', 'study')
+    void generateQuizForSelected()
+    return { message: '正在生成当前章节测验。' }
+  },
   wrong: async () => {
     await loadWrongs()
     activeView.value = 'quiz'
     status.message = '已切换到测验复盘，可查看错题归档。'
+    return { message: wrongs.value.length ? '已打开错题归档。' : '已打开测验复盘，当前暂无错题。' }
   },
   settings: () => {
     activeView.value = 'settings'
     status.message = '已切换到模型设置。'
+    return { message: '已打开模型设置。' }
+  },
+  systemSettings: () => {
+    settingsOpen.value = true
+    status.message = '已打开系统设置。'
+    return { message: '已打开系统设置。' }
+  },
+  providerTest: () => {
+    activeView.value = 'settings'
+    void runProviderTest()
+    return { message: '正在测试模型连接。' }
+  },
+  cloudModels: () => {
+    activeView.value = 'settings'
+    if (config.provider !== 'cloud_ollama') return voiceGuard('请先切换到云端 Ollama，再获取模型列表。', 'settings')
+    void loadCloudModels()
+    return { message: '正在获取云端 Ollama 模型列表。' }
+  },
+  microphoneTest: () => {
+    void testMicrophone()
+    return { message: '正在测试麦克风。' }
   },
   mock: () => {
     config.provider = 'mock'
     status.message = '已通过语音切换到 Mock Provider。'
+    return { message: '已切换到 Mock Provider。' }
+  },
+  localOllama: () => {
+    config.provider = 'local_ollama'
+    activeView.value = 'settings'
+    status.message = '已通过语音切换到本地 Ollama。'
+    return { message: '已切换到本地 Ollama。' }
+  },
+  cloudOllama: () => {
+    config.provider = 'cloud_ollama'
+    activeView.value = 'settings'
+    status.message = '已通过语音切换到云端 Ollama。'
+    return { message: '已切换到云端 Ollama。' }
+  },
+  openaiCompatible: () => {
+    config.provider = 'openai_compatible'
+    activeView.value = 'settings'
+    status.message = '已通过语音切换到 OpenAI 兼容模型。'
+    return { message: '已切换到 OpenAI 兼容模型。' }
   }
 })
+
+const voiceModeText = computed(() => (listening.value ? '正在监听' : voiceStatus.testingMicrophone ? '麦克风测试中' : '待命'))
 
 onMounted(async () => {
   loadSettings()
@@ -446,6 +520,12 @@ function resetPrompts() {
   status.message = '提示词模板已恢复默认。'
 }
 
+function voiceGuard(message, view) {
+  activeView.value = view
+  status.warning = `无法执行：${message}`
+  return { ok: false, message: `无法执行：${message}` }
+}
+
 function applyProviderDefaults() {
   const defaults = providerDefaults[config.provider]
   const knownModels = Object.values(providerDefaults).map((item) => item.model)
@@ -538,24 +618,38 @@ function applyProviderDefaults() {
         @submit="submitCurrentQuiz"
       />
       <section v-if="activeView === 'voice'" class="voice-page">
-        <div class="panel-title">
-          <MessageCircle :size="20" />
-          <h2>语音助手</h2>
-        </div>
-        <div class="voice-summary">
-          <p>{{ transcript }}</p>
-          <span>{{ voiceStatus.diagnostic }}</span>
-        </div>
-        <div class="voice-actions">
-          <button class="primary" :class="{ active: listening }" :disabled="!supported" @click="start">
-            <Mic :size="17" /> {{ listening ? '停止并处理语音' : '开始语音识别' }}
-          </button>
-          <button :disabled="voiceStatus.testingMicrophone" @click="testMicrophone">麦克风测试</button>
-          <button :disabled="!voiceStatus.testingMicrophone" @click="stopMicrophoneTest">停止测试</button>
-        </div>
+        <header class="voice-hero">
+          <div>
+            <div class="eyebrow"><Radio :size="16" /> 语音工作台</div>
+            <h2>说出指令，系统自动导航或执行</h2>
+            <p>支持页面跳转、资料学习、测验复盘和模型切换；无法执行时会给出原因并带你到对应页面。</p>
+          </div>
+          <div class="voice-state" :class="{ active: listening || voiceStatus.testingMicrophone }">
+            <span>{{ voiceModeText }}</span>
+            <strong>{{ voiceStatus.matchedCommand || '等待命令' }}</strong>
+          </div>
+        </header>
+
+        <section class="voice-console">
+          <div class="voice-transcript">
+            <MessageCircle :size="22" />
+            <div>
+              <strong>{{ transcript }}</strong>
+              <span>{{ voiceStatus.diagnostic }}</span>
+            </div>
+          </div>
+          <div class="voice-actions">
+            <button class="primary" :class="{ active: listening }" :disabled="!supported" @click="start">
+              <Mic :size="17" /> {{ listening ? '停止并处理语音' : '开始语音识别' }}
+            </button>
+            <button :disabled="voiceStatus.testingMicrophone" @click="testMicrophone"><Activity :size="17" /> 麦克风测试</button>
+            <button :disabled="!voiceStatus.testingMicrophone" @click="stopMicrophoneTest">停止测试</button>
+          </div>
+        </section>
+
         <div class="voice-diagnostics">
           <article>
-            <strong>麦克风权限</strong>
+            <strong>麦克风</strong>
             <span>{{ voiceStatus.permission }} · {{ voiceStatus.deviceText }}</span>
           </article>
           <article>
@@ -568,17 +662,25 @@ function applyProviderDefaults() {
             <span>{{ voiceStatus.lastText || '暂无' }}</span>
           </article>
           <article>
-            <strong>命令命中</strong>
-            <span>{{ voiceStatus.matchedCommand || '暂无' }}</span>
+            <strong>执行状态</strong>
+            <span>{{ voiceStatus.matchedCommand ? '已命中' : '未命中' }}</span>
           </article>
         </div>
-        <div class="command-grid">
-          <span>上传资料</span>
-          <span>生成大纲</span>
-          <span>开始测验</span>
-          <span>查看错题</span>
-          <span>模型设置</span>
-          <span>切换 mock 模型</span>
+
+        <div class="voice-command-board">
+          <section v-for="group in VOICE_COMMAND_GROUPS" :key="group.title">
+            <h3><Compass :size="17" /> {{ group.title }}</h3>
+            <div class="voice-command-grid">
+              <article v-for="command in group.items" :key="command.name">
+                <div>
+                  <CheckCircle2 :size="16" />
+                  <strong>{{ command.name }}</strong>
+                </div>
+                <p>{{ command.description }}</p>
+                <span>{{ command.keywords.slice(0, 3).join(' / ') }}</span>
+              </article>
+            </div>
+          </section>
         </div>
       </section>
       <ProviderPanel
