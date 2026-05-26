@@ -5,6 +5,7 @@ import DashboardMetrics from './components/DashboardMetrics.vue'
 import FaceGate from './components/FaceGate.vue'
 import HeroHeader from './components/HeroHeader.vue'
 import KnowledgePanel from './components/KnowledgePanel.vue'
+import NextActionCard from './components/NextActionCard.vue'
 import ProviderPanel from './components/ProviderPanel.vue'
 import QuizPanel from './components/QuizPanel.vue'
 import SettingsModal from './components/SettingsModal.vue'
@@ -62,6 +63,7 @@ const cloudModels = ref([])
 const cloudLoading = ref(false)
 const testMessage = ref('')
 const activeView = ref('library')
+const voiceCommandQuery = ref('')
 const face = reactive({ ok: false })
 const faceProfileState = reactive({ enrolled: false, username: '杨翰飞', needsUpgrade: false })
 const faceManageOpen = ref(false)
@@ -139,6 +141,53 @@ const navItems = [
 const progress = computed(() => {
   if (!chapters.value.length) return 0
   return Math.round(chapters.value.reduce((sum, item) => sum + item.progress, 0) / chapters.value.length)
+})
+const nextAction = computed(() => {
+  if (!uniqueDocuments.value.length) {
+    return {
+      title: '先上传课程资料',
+      description: '资料入库后，系统才能生成学习路径、章节内容和测验。',
+      action: '上传资料',
+      view: 'library',
+      task: 'navigate'
+    }
+  }
+  if (!chapters.value.length) {
+    return {
+      title: '生成课程大纲',
+      description: '根据知识库创建 4 个章节，形成清晰的学习路径。',
+      action: '生成大纲',
+      view: 'study',
+      task: 'outline'
+    }
+  }
+  if (!chapters.value.some((chapter) => chapter.content)) {
+    return {
+      title: '生成章节学习内容',
+      description: '为当前章节生成结构化 Markdown 学习材料。',
+      action: '生成内容',
+      view: 'study',
+      task: 'content'
+    }
+  }
+  if (!quizzes.value.length) {
+    return {
+      title: '开始章节测验',
+      description: '用测验检查掌握情况，错题会自动进入复盘。',
+      action: '开始测验',
+      view: 'quiz',
+      task: 'quiz',
+      secondary: '学习路径'
+    }
+  }
+  return {
+    title: wrongs.value.length ? '复盘错题' : '继续保持学习节奏',
+    description: wrongs.value.length ? '查看错题解析，定位薄弱知识点。' : '当前暂无错题，可以继续学习下一章。',
+    action: wrongs.value.length ? '查看错题' : '打开测验',
+    view: 'quiz',
+    task: 'navigate',
+    secondary: '学习路径'
+  }
 })
 const providerHint = computed(() => providerDefaults[config.provider].hint)
 const modelPlaceholder = computed(() => providerDefaults[config.provider].model)
@@ -241,6 +290,22 @@ const { listening, supported, transcript, voiceStatus, start, testMicrophone, st
 
 const voiceModeText = computed(() => (listening.value ? '正在监听' : voiceStatus.testingMicrophone ? '麦克风测试中' : '待命'))
 const voiceDetail = computed(() => (voiceStatus.diagnostic === transcript.value ? '' : voiceStatus.diagnostic))
+const recommendedVoiceCommands = computed(() =>
+  VOICE_COMMAND_GROUPS.flatMap((group) => group.items).filter((command) =>
+    ['上传资料', '生成课程大纲', '开始测验', '查看错题', '模型设置', '麦克风测试'].includes(command.name)
+  )
+)
+const filteredVoiceGroups = computed(() => {
+  const keyword = voiceCommandQuery.value.trim().toLowerCase()
+  return VOICE_COMMAND_GROUPS.map((group) => ({
+    ...group,
+    items: keyword
+      ? group.items.filter((command) =>
+          [command.name, command.description, ...command.keywords].some((item) => item.toLowerCase().includes(keyword))
+        )
+      : group.items
+  })).filter((group) => group.items.length)
+})
 
 onMounted(async () => {
   loadSettings()
@@ -377,6 +442,7 @@ async function handleUpload(event) {
 }
 
 async function removeDocument(doc) {
+  if (!window.confirm(`确认删除资料“${doc.filename}”？删除后会同步清理学习大纲、测验和错题记录。`)) return
   const data = await runTask(`正在删除 ${doc.filename}...`, () => deleteDocument(doc.id))
   if (data?.ok) {
     status.message = data.message
@@ -390,6 +456,7 @@ async function removeDocument(doc) {
 }
 
 async function removeAllDocuments() {
+  if (!window.confirm('确认清空资料库？该操作会同步清理学习大纲、测验和错题记录。')) return
   const data = await runTask('正在清空资料库...', clearDocuments)
   if (data?.ok) {
     status.message = data.message
@@ -401,6 +468,22 @@ async function removeAllDocuments() {
     wrongs.value = []
     activeView.value = 'library'
   }
+}
+
+async function handleNextAction() {
+  activeView.value = nextAction.value.view
+  if (nextAction.value.task === 'outline') {
+    await generateOutline()
+  } else if (nextAction.value.task === 'content') {
+    if (!selectedChapterId.value && chapters.value[0]) selectedChapterId.value = chapters.value[0].id
+    if (selectedChapter.value) await generateContent(selectedChapter.value)
+  } else if (nextAction.value.task === 'quiz') {
+    await generateQuizForSelected()
+  }
+}
+
+function handleNextSecondary() {
+  activeView.value = 'study'
 }
 
 async function generateOutline() {
@@ -575,6 +658,15 @@ function applyProviderDefaults() {
       </div>
     </section>
 
+    <NextActionCard
+      :title="nextAction.title"
+      :description="nextAction.description"
+      :action="nextAction.action"
+      :secondary="nextAction.secondary"
+      @primary="handleNextAction"
+      @secondary="handleNextSecondary"
+    />
+
     <DashboardMetrics
       :document-count="uniqueDocuments.length"
       :chapter-count="chapters.length"
@@ -617,6 +709,7 @@ function applyProviderDefaults() {
         :wrongs="visibleWrongs"
         :loading="status.loading"
         @submit="submitCurrentQuiz"
+        @study="activeView = 'study'"
       />
       <section v-if="activeView === 'voice'" class="voice-page">
         <header class="voice-hero">
@@ -669,7 +762,14 @@ function applyProviderDefaults() {
         </div>
 
         <div class="voice-command-board">
-          <section v-for="group in VOICE_COMMAND_GROUPS" :key="group.title">
+          <section class="voice-recommend">
+            <h3><Compass :size="17" /> 推荐指令</h3>
+            <div class="command-chips">
+              <span v-for="command in recommendedVoiceCommands" :key="command.name">{{ command.name }}</span>
+            </div>
+            <input v-model="voiceCommandQuery" class="command-search" placeholder="搜索指令，例如：测验、模型、麦克风" />
+          </section>
+          <section v-for="group in filteredVoiceGroups" :key="group.title">
             <h3><Compass :size="17" /> {{ group.title }}</h3>
             <div class="voice-command-grid">
               <article v-for="command in group.items" :key="command.name">

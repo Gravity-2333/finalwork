@@ -19,6 +19,12 @@ defineEmits(['test', 'load-cloud-models'])
 
 const showApiKey = computed(() => ['cloud_ollama', 'openai_compatible'].includes(props.config.provider))
 const showCloudModels = computed(() => props.config.provider === 'cloud_ollama' && props.cloudModels.length)
+const providerOptions = [
+  { id: 'mock', title: 'Mock 演示', desc: '无密钥离线演示，适合课堂截图。' },
+  { id: 'local_ollama', title: '本地 Ollama', desc: '连接本机 Ollama 服务。' },
+  { id: 'cloud_ollama', title: '云端 Ollama', desc: '获取并测试云端模型列表。' },
+  { id: 'openai_compatible', title: '兼容接口', desc: '适合 DeepSeek 等服务。' }
+]
 </script>
 
 <template>
@@ -30,17 +36,20 @@ const showCloudModels = computed(() => props.config.provider === 'cloud_ollama' 
     </div>
 
     <div class="provider-fields">
-      <label>
-        <span>模型来源</span>
-        <select v-model="config.provider">
-          <option value="mock">Mock</option>
-          <option value="local_ollama">本地 Ollama</option>
-          <option value="cloud_ollama">云端 Ollama</option>
-          <option value="openai_compatible">OpenAI 兼容</option>
-        </select>
-      </label>
+      <div class="provider-choice">
+        <button
+          v-for="option in providerOptions"
+          :key="option.id"
+          type="button"
+          :class="{ selected: config.provider === option.id }"
+          @click="config.provider = option.id"
+        >
+          <strong>{{ option.title }}</strong>
+          <span>{{ option.desc }}</span>
+        </button>
+      </div>
 
-      <label>
+      <label v-if="config.provider !== 'mock'">
         <span>模型</span>
         <select v-if="showCloudModels" v-model="config.model">
           <option v-for="model in cloudModels" :key="model.id" :value="model.id">{{ model.name }}</option>
@@ -48,7 +57,7 @@ const showCloudModels = computed(() => props.config.provider === 'cloud_ollama' 
         <input v-else v-model="config.model" :placeholder="modelPlaceholder" />
       </label>
 
-      <label>
+      <label v-if="config.provider !== 'mock'">
         <span>地址</span>
         <input v-model="config.base_url" :placeholder="baseUrlPlaceholder" />
       </label>
@@ -72,19 +81,22 @@ const showCloudModels = computed(() => props.config.provider === 'cloud_ollama' 
         <input v-else v-model="config.api_key_env" :placeholder="apiKeyEnvPlaceholder" />
       </label>
 
-      <label class="toggle">
+      <details class="advanced-settings">
+        <summary>高级设置</summary>
+        <label class="toggle">
         <input v-model="config.langsmith_enabled" type="checkbox" />
         <span>
           LangSmith 追踪
           <small>仅在填写 LANGSMITH_API_KEY 后记录调用链路</small>
         </span>
-      </label>
+        </label>
+      </details>
 
       <button v-if="config.provider === 'cloud_ollama'" :disabled="cloudLoading" @click="$emit('load-cloud-models')">
         <RefreshCw :size="16" /> 模型列表
       </button>
 
-      <button class="primary" :disabled="status.loading" @click="$emit('test')">
+      <button class="primary provider-test" :disabled="status.loading" @click="$emit('test')">
         <Wifi :size="16" /> 测试
       </button>
     </div>

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Camera, LogIn, ScanFace, ShieldCheck, UserPlus } from 'lucide-vue-next'
+import { Camera, CheckCircle2, LogIn, ScanFace, ShieldCheck, UserPlus } from 'lucide-vue-next'
 
 const props = defineProps({
   loading: Boolean,
@@ -276,12 +276,21 @@ onBeforeUnmount(() => {
       <div class="login-copy">
         <div class="eyebrow"><ShieldCheck :size="17" /> 人脸安全登录</div>
         <h1>AI 学习助手</h1>
-        <p>{{ allowReenroll ? '重新采集账号本人脸部模板，保存后后续登录将使用新模板。' : '首次使用需录入账号本人脸部模板；之后登录必须通过当前摄像头人脸比对。' }}</p>
+        <p>{{ allowReenroll ? '重新采集账号本人脸部模板，保存后后续登录将使用新模板。' : '用账号和人脸模板绑定学习工作台，避免他人直接进入你的学习记录。' }}</p>
+        <ol class="login-steps">
+          <li><CheckCircle2 :size="15" /> 输入账号</li>
+          <li><CheckCircle2 :size="15" /> 开启摄像头</li>
+          <li><CheckCircle2 :size="15" /> 录入或识别人脸</li>
+        </ol>
         <label class="account-field">
           <span>账号</span>
           <input v-model="username" :disabled="allowReenroll" placeholder="请输入账号姓名" />
         </label>
         <p class="enroll-state">{{ needsUpgrade ? '该账号人脸模板版本较旧，请重新录入一次升级模板。' : enrolled ? (allowReenroll ? '已登录，可重新录入授权人脸。' : '该账号已录入授权人脸，请直接核验登录。') : '该账号尚未录入授权人脸，请先录入。' }}</p>
+        <div class="privacy-note">
+          <ShieldCheck :size="16" />
+          <span>人脸特征仅用于本地课堂项目登录演示，不上传第三方平台；该方案不是工业级活体安全系统。</span>
+        </div>
       </div>
 
       <div class="camera-panel">

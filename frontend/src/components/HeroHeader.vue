@@ -12,11 +12,11 @@ defineEmits(['manage-face', 'voice', 'logout'])
 </script>
 
 <template>
-  <section class="hero">
+  <header class="hero">
     <div class="hero-copy">
-      <div class="eyebrow"><BrainCircuit :size="17" /> LangChain · LangGraph · 可选 LangSmith</div>
+      <div class="eyebrow"><BrainCircuit :size="17" /> AI Learning Workspace</div>
       <h1>AI 学习助手</h1>
-      <p>把课程资料转成可学习、可测验、可复盘的个人知识库。</p>
+      <p>把课程资料转成学习路径、章节内容、测验与错题复盘。</p>
     </div>
     <div class="hero-actions">
       <button :class="['face-button', { verified: faceOk }]" :disabled="loading" @click="$emit('manage-face')">
@@ -29,5 +29,5 @@ defineEmits(['manage-face', 'voice', 'logout'])
         <LogOut :size="18" /> 退出登录
       </button>
     </div>
-  </section>
+  </header>
 </template>
