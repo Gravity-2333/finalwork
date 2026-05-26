@@ -681,7 +681,8 @@ h1 {
 }
 
 .content-frame .doc-list {
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 520px));
+  align-items: stretch;
 }
 
 .doc-list article,
@@ -700,6 +701,11 @@ h1 {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+}
+
+.doc-list article > div {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .doc-list strong,
@@ -1681,10 +1687,14 @@ button svg {
 }
 
 .doc-list strong {
-  max-width: min(100%, 28ch);
+  max-width: 100%;
+  display: -webkit-box;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .doc-list small {
