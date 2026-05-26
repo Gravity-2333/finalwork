@@ -5,7 +5,8 @@ defineProps({
   title: { type: String, required: true },
   description: { type: String, required: true },
   action: { type: String, required: true },
-  secondary: { type: String, default: '' }
+  secondary: { type: String, default: '' },
+  disabled: Boolean
 })
 
 defineEmits(['primary', 'secondary'])
@@ -19,7 +20,7 @@ defineEmits(['primary', 'secondary'])
       <p>{{ description }}</p>
     </div>
     <div class="next-action-buttons">
-      <button class="primary" @click="$emit('primary')">
+      <button class="primary" :disabled="disabled" @click="$emit('primary')">
         {{ action }} <ArrowRight :size="16" />
       </button>
       <button v-if="secondary" class="secondary" @click="$emit('secondary')">{{ secondary }}</button>

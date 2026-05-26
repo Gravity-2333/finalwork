@@ -87,7 +87,7 @@ const providerOptions = [
         <input v-model="config.langsmith_enabled" type="checkbox" />
         <span>
           LangSmith 追踪
-          <small>仅在填写 LANGSMITH_API_KEY 后记录调用链路</small>
+          <small>用于记录 LangChain / LangGraph 的调用链路、Prompt、模型返回和耗时，便于调试。需要配置 LANGSMITH_API_KEY，课堂演示一般保持关闭。</small>
         </span>
         </label>
       </details>

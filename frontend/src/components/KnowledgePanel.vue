@@ -36,7 +36,7 @@ function onUpload(event) {
         <div>
           <strong :title="doc.filename">{{ doc.filename }}</strong>
           <span>{{ doc.chunk_count }} 个切片 · 已入库</span>
-          <small>{{ doc.summary }}</small>
+          <small>{{ doc.summary || '已入库，可用于生成学习内容。' }}</small>
         </div>
         <button class="icon-action danger" :disabled="loading" title="删除该资料" @click="$emit('delete', doc)">
           <Trash2 :size="15" />

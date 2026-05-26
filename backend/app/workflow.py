@@ -30,27 +30,43 @@ class AssistantState(TypedDict, total=False):
 
 DEFAULT_PROMPTS = {
     "outline": (
-        "你是学习大纲生成器。请严格根据课程资料生成4个章节的学习大纲。\n"
-        "只输出4行大纲，不要寒暄、不要解释、不要标题、不要 Markdown 代码块。\n"
-        "每行格式必须为：章节标题 - 学习目标。\n"
-        "章节标题简洁，学习目标适合学生复习。\n"
-        "资料：\n{{context}}"
+        "你是课程学习大纲生成器。\n"
+        "请严格基于课程资料生成 4 个章节的学习大纲。\n\n"
+        "输出规则：\n"
+        "1. 只输出 4 行。\n"
+        "2. 每行格式必须是：章节标题 - 学习目标\n"
+        "3. 不要输出寒暄语。\n"
+        "4. 不要输出“好的”“下面是”“这是为你生成的”等说明。\n"
+        "5. 不要输出 Markdown 代码块。\n"
+        "6. 不要输出编号以外的解释文字。\n\n"
+        "课程资料：\n{{context}}"
     ),
     "chapter": (
-        "你是章节学习内容生成器。请为章节《{{chapter_title}}》生成可直接展示给学生的 Markdown 学习内容。\n"
-        "章节目标：{{chapter_objective}}\n"
+        "你是课程章节内容生成器。\n"
+        "请严格基于资料，为章节《{{chapter_title}}》生成可直接展示给学生阅读的 Markdown 学习内容。\n\n"
+        "章节目标：\n{{chapter_objective}}\n\n"
         "输出要求：\n"
-        "1. 只输出正文 Markdown，不要出现“好的”“下面是”“这是为您生成的”等寒暄语。\n"
-        "2. 不要重复章节标题和章节目标。\n"
-        "3. 使用二级或三级标题、列表和加粗组织内容。\n"
-        "4. 内容必须包含核心概念、学习步骤、重点难点和复盘建议。\n"
-        "资料：\n{{context}}"
+        "1. 只输出正文 Markdown。\n"
+        "2. 第一行必须直接是二级标题，例如：## 核心概念\n"
+        "3. 不要输出“好的”“下面是”“这是为你生成的”“以下内容”等寒暄或说明。\n"
+        "4. 不要重复章节标题和章节目标。\n"
+        "5. 不要使用 Markdown 代码围栏。\n"
+        "6. 内容必须包含：核心概念、学习步骤、重点难点、复盘建议。\n"
+        "7. 尽量结合资料内容，不要泛泛而谈。\n\n"
+        "课程资料：\n{{context}}"
     ),
     "quiz": (
-        "请基于以下资料为章节《{{chapter_title}}》生成3道单选题。\n"
-        "输出 JSON 数组，每项包含 question/options/answer/explanation。\n"
-        "章节目标：{{chapter_objective}}\n"
-        "资料：\n{{context}}"
+        "你是章节测验出题器。\n"
+        "请严格基于资料，为章节《{{chapter_title}}》生成 3 道单选题。\n\n"
+        "章节目标：\n{{chapter_objective}}\n\n"
+        "输出规则：\n"
+        "1. 只输出 JSON 数组。\n"
+        "2. 不要输出 Markdown 代码块。\n"
+        "3. 不要输出任何解释文字。\n"
+        "4. JSON 数组中每个对象必须包含：question、options、answer、explanation。\n"
+        "5. options 必须是 4 个选项的数组。\n"
+        "6. answer 必须与 options 中某一项完全一致。\n\n"
+        "课程资料：\n{{context}}"
     ),
 }
 
@@ -260,15 +276,47 @@ def _render_prompt(template: str | None, key: str, values: dict[str, str]) -> st
 
 
 def _clean_model_text(text: str, task: str = "") -> str:
-    cleaned = text.strip()
-    cleaned = re.sub(r"^```(?:markdown|md|text)?\s*", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\s*```$", "", cleaned)
-    cleaned = re.sub(r"^(好的|当然|以下是|下面是|这是|为您|我将).*?(?:\n|：|:)", "", cleaned, flags=re.IGNORECASE).strip()
-    cleaned = re.sub(r"^\s*-{3,}\s*", "", cleaned)
+    cleaned = _strip_code_fences(text)
+    lines = []
+    dropping_prefix = True
+    for raw_line in cleaned.splitlines():
+        line = raw_line.strip()
+        if not line or line == "---":
+            if dropping_prefix:
+                continue
+            lines.append(raw_line)
+            continue
+        if dropping_prefix and _is_preface_line(line):
+            continue
+        dropping_prefix = False
+        lines.append(raw_line)
+    cleaned = "\n".join(lines).strip()
     if task == "chapter":
         cleaned = re.sub(r"^#{1,3}\s*《[^》]+》\s*(?:学习指南|学习内容)?\s*\n+", "", cleaned).strip()
         cleaned = re.sub(r"^#{1,3}\s*(?:章节)?(?:学习指南|学习内容)\s*\n+", "", cleaned).strip()
     return cleaned
+
+
+def _strip_code_fences(text: str) -> str:
+    cleaned = text.strip()
+    cleaned = re.sub(r"^```(?:json|markdown|md|text)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    return cleaned.strip()
+
+
+def _is_preface_line(line: str) -> bool:
+    patterns = [
+        r"^好的[，。,\s]",
+        r"^当然[，。,\s]",
+        r"^下面是",
+        r"^以下是",
+        r"^这是为[您你]生成的",
+        r"^我将为[您你]",
+        r"^根据[您你]提供的资料",
+        r"^基于[您你]提供的资料",
+        r"^为[您你]整理",
+    ]
+    return any(re.search(pattern, line, flags=re.IGNORECASE) for pattern in patterns)
 
 
 def _parse_outline(text: str) -> list[dict]:
@@ -298,6 +346,7 @@ def _parse_outline(text: str) -> list[dict]:
 
 def _parse_quiz(text: str, chapter: dict) -> list[dict]:
     try:
+        text = _strip_code_fences(text)
         start = text.index("[")
         end = text.rindex("]") + 1
         parsed = json.loads(text[start:end])

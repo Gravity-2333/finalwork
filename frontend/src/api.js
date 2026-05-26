@@ -59,6 +59,10 @@ export function createQuiz(id, config) {
   })
 }
 
+export function listQuiz(id) {
+  return request(`/chapters/${id}/quiz`)
+}
+
 export function submitQuiz(id, answers) {
   return request(`/chapters/${id}/submit`, {
     method: 'POST',

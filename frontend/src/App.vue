@@ -23,6 +23,7 @@ import {
   listCloudOllamaModels,
   listChapters,
   listDocuments,
+  listQuiz,
   listWrongAnswers,
   submitQuiz,
   testProvider,
@@ -64,6 +65,7 @@ const cloudLoading = ref(false)
 const testMessage = ref('')
 const activeView = ref('library')
 const voiceCommandQuery = ref('')
+const courseBootstrapping = ref(false)
 const face = reactive({ ok: false })
 const faceProfileState = reactive({ enrolled: false, username: '杨翰飞', needsUpgrade: false })
 const faceManageOpen = ref(false)
@@ -71,15 +73,16 @@ const settingsOpen = ref(false)
 const faceReplaceToken = ref('')
 const maxUploadBytes = 25 * 1024 * 1024
 const maxUploadFiles = 20
+const promptVersion = 2
 let faceProfileLookupId = 0
 
 const defaultPrompts = {
   outline:
-    '你是学习大纲生成器。请严格根据课程资料生成4个章节的学习大纲。\n只输出4行大纲，不要寒暄、不要解释、不要标题、不要 Markdown 代码块。\n每行格式必须为：章节标题 - 学习目标。\n章节标题简洁，学习目标适合学生复习。\n资料：\n{{context}}',
+    '你是课程学习大纲生成器。\n请严格基于课程资料生成 4 个章节的学习大纲。\n\n输出规则：\n1. 只输出 4 行。\n2. 每行格式必须是：章节标题 - 学习目标\n3. 不要输出寒暄语。\n4. 不要输出“好的”“下面是”“这是为你生成的”等说明。\n5. 不要输出 Markdown 代码块。\n6. 不要输出编号以外的解释文字。\n\n课程资料：\n{{context}}',
   chapter:
-    '你是章节学习内容生成器。请为章节《{{chapter_title}}》生成可直接展示给学生的 Markdown 学习内容。\n章节目标：{{chapter_objective}}\n输出要求：\n1. 只输出正文 Markdown，不要出现“好的”“下面是”“这是为您生成的”等寒暄语。\n2. 不要重复章节标题和章节目标。\n3. 使用二级或三级标题、列表和加粗组织内容。\n4. 内容必须包含核心概念、学习步骤、重点难点和复盘建议。\n资料：\n{{context}}',
+    '你是课程章节内容生成器。\n请严格基于资料，为章节《{{chapter_title}}》生成可直接展示给学生阅读的 Markdown 学习内容。\n\n章节目标：\n{{chapter_objective}}\n\n输出规则：\n1. 只输出正文 Markdown。\n2. 第一行必须直接是二级标题，例如：## 核心概念\n3. 不要输出“好的”“下面是”“这是为你生成的”“以下内容”等寒暄或说明。\n4. 不要重复章节标题和章节目标。\n5. 不要使用 Markdown 代码围栏。\n6. 内容必须包含：核心概念、学习步骤、重点难点、复盘建议。\n7. 尽量结合资料内容，不要泛泛而谈。\n\n课程资料：\n{{context}}',
   quiz:
-    '请基于以下资料为章节《{{chapter_title}}》生成3道单选题。\n输出 JSON 数组，每项包含 question/options/answer/explanation。\n章节目标：{{chapter_objective}}\n资料：\n{{context}}'
+    '你是章节测验出题器。\n请严格基于资料，为章节《{{chapter_title}}》生成 3 道单选题。\n\n章节目标：\n{{chapter_objective}}\n\n输出规则：\n1. 只输出 JSON 数组。\n2. 不要输出 Markdown 代码块。\n3. 不要输出任何解释文字。\n4. JSON 数组中每个对象必须包含：question、options、answer、explanation。\n5. options 必须是 4 个选项的数组。\n6. answer 必须与 options 中某一项完全一致。\n\n课程资料：\n{{context}}'
 }
 
 const appSettings = reactive({
@@ -143,6 +146,16 @@ const progress = computed(() => {
   return Math.round(chapters.value.reduce((sum, item) => sum + item.progress, 0) / chapters.value.length)
 })
 const nextAction = computed(() => {
+  if (courseBootstrapping.value) {
+    return {
+      title: '正在初始化课程',
+      description: status.message || '系统正在按顺序生成大纲、章节内容和测验。',
+      action: '初始化中',
+      view: 'study',
+      task: 'navigate',
+      disabled: true
+    }
+  }
   if (!uniqueDocuments.value.length) {
     return {
       title: '先上传课程资料',
@@ -170,13 +183,13 @@ const nextAction = computed(() => {
       task: 'content'
     }
   }
-  if (!quizzes.value.length) {
+  if (!quizzes.value.length || !result.value) {
     return {
       title: '开始章节测验',
-      description: '用测验检查掌握情况，错题会自动进入复盘。',
-      action: '开始测验',
+      description: quizzes.value.length ? '测验已生成，请完成作答。' : '用测验检查掌握情况，错题会自动进入复盘。',
+      action: quizzes.value.length ? '打开测验' : '生成测验',
       view: 'quiz',
-      task: 'quiz',
+      task: quizzes.value.length ? 'navigate' : 'quiz',
       secondary: '学习路径'
     }
   }
@@ -437,7 +450,60 @@ async function handleUpload(event) {
     status.message = `已入库 ${documents.length} 个资料，共 ${totalChunks} 个片段。`
     status.warning = errors.length ? `部分文件未入库：${errors.map((item) => `${item.filename} ${item.message}`).join('；')}` : ''
     await refreshDocuments()
-    if (documents.length) activeView.value = 'study'
+    if (documents.length) await bootstrapCourseAfterUpload()
+  }
+}
+
+async function bootstrapCourseAfterUpload() {
+  courseBootstrapping.value = true
+  status.loading = true
+  activeView.value = 'study'
+  try {
+    status.message = '资料已入库，正在检查学习路径。'
+    let currentChapters = [...chapters.value]
+    if (!currentChapters.length) {
+      status.message = '正在生成课程大纲。'
+      const outline = await createOutline(providerPayload())
+      if (outline?.warning) status.warning = outline.warning
+      currentChapters = outline?.chapters || []
+      chapters.value = currentChapters
+      selectedChapterId.value = currentChapters[0]?.id || null
+    }
+    for (let index = 0; index < currentChapters.length; index += 1) {
+      const chapter = currentChapters[index]
+      if (!chapter.content) {
+        status.message = `正在生成第 ${index + 1}/${currentChapters.length} 章学习内容。`
+        const content = await createChapterContent(chapter.id, providerPayload())
+        if (content?.warning) status.warning = content.warning
+        const targetIndex = chapters.value.findIndex((item) => item.id === chapter.id)
+        if (targetIndex >= 0) chapters.value[targetIndex] = content.chapter
+        currentChapters[index] = content.chapter
+      }
+      status.message = `正在检查第 ${index + 1}/${currentChapters.length} 章测验。`
+      const existingQuiz = await listQuiz(chapter.id).catch(() => ({ quizzes: [] }))
+      if (!existingQuiz.quizzes?.length) {
+        status.message = `正在生成第 ${index + 1}/${currentChapters.length} 章测验。`
+        const quiz = await createQuiz(chapter.id, providerPayload())
+        if (quiz?.warning) status.warning = quiz.warning
+        if (index === 0) quizzes.value = quiz.quizzes || []
+      } else if (index === 0) {
+        quizzes.value = existingQuiz.quizzes
+      }
+    }
+    selectedChapterId.value = currentChapters[0]?.id || null
+    if (selectedChapterId.value && !quizzes.value.length) {
+      const firstQuiz = await listQuiz(selectedChapterId.value).catch(() => ({ quizzes: [] }))
+      quizzes.value = firstQuiz.quizzes || []
+    }
+    result.value = null
+    Object.keys(answers).forEach((key) => delete answers[key])
+    activeView.value = 'study'
+    status.message = '课程初始化完成，可直接学习章节内容或开始测验。'
+  } catch (error) {
+    status.warning = `课程初始化中断：${error.message}`
+  } finally {
+    courseBootstrapping.value = false
+    status.loading = false
   }
 }
 
@@ -471,6 +537,7 @@ async function removeAllDocuments() {
 }
 
 async function handleNextAction() {
+  if (nextAction.value.disabled) return
   activeView.value = nextAction.value.view
   if (nextAction.value.task === 'outline') {
     await generateOutline()
@@ -587,6 +654,10 @@ function loadSettings() {
   if (!raw) return
   try {
     const saved = JSON.parse(raw)
+    if (saved.promptVersion !== promptVersion) {
+      localStorage.setItem('ai-study-settings', JSON.stringify({ promptVersion, prompts: appSettings.prompts }))
+      return
+    }
     Object.assign(appSettings.prompts, saved.prompts || {})
   } catch {
     localStorage.removeItem('ai-study-settings')
@@ -594,7 +665,7 @@ function loadSettings() {
 }
 
 function saveSettings() {
-  localStorage.setItem('ai-study-settings', JSON.stringify({ prompts: appSettings.prompts }))
+  localStorage.setItem('ai-study-settings', JSON.stringify({ promptVersion, prompts: appSettings.prompts }))
   settingsOpen.value = false
   status.message = '系统设置已保存，后续 AI 生成会使用当前提示词模板。'
 }
@@ -663,6 +734,7 @@ function applyProviderDefaults() {
       :description="nextAction.description"
       :action="nextAction.action"
       :secondary="nextAction.secondary"
+      :disabled="nextAction.disabled"
       @primary="handleNextAction"
       @secondary="handleNextSecondary"
     />

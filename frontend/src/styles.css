@@ -453,13 +453,21 @@ h1 {
   box-shadow: 0 0 0 3px rgba(31, 111, 229, 0.1);
 }
 
+.provider-choice button.selected:hover:not(:disabled) {
+  background: #e1efff;
+  color: var(--color-primary-strong);
+}
+
 .advanced-settings {
+  grid-column: 1 / -1;
   align-self: stretch;
   min-height: 40px;
+  min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface-soft);
-  padding: 8px 10px;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
 }
 
 .advanced-settings summary {
@@ -470,11 +478,38 @@ h1 {
 }
 
 .advanced-settings .toggle {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
   margin-top: 8px;
+}
+
+.advanced-settings input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.advanced-settings small {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.45;
 }
 
 .provider-test {
   min-width: 130px;
+}
+
+.provider-panel .runtime-state,
+.provider-panel .provider-fields,
+.provider-panel > p {
+  grid-column: 1 / -1;
+}
+
+.provider-panel .runtime-state {
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-soft);
 }
 
 .warning {
@@ -1464,10 +1499,28 @@ textarea:focus-visible {
   background: transparent;
 }
 
+.app-nav button:hover:not(:disabled) {
+  background: #eff6ff;
+  color: #1d4ed8;
+  box-shadow: none;
+}
+
 .app-nav button.selected {
   background: var(--color-primary);
   border-color: var(--color-primary);
+  color: #fff;
   box-shadow: 0 10px 24px rgba(31, 111, 229, 0.2);
+}
+
+.app-nav button.selected:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.app-nav svg,
+button svg {
+  color: currentColor;
 }
 
 .panel-title {

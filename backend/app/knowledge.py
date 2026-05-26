@@ -65,7 +65,12 @@ def build_knowledge(file_path: Path) -> dict:
 def list_documents() -> list[dict]:
     with connect() as conn:
         rows = conn.execute("SELECT * FROM documents ORDER BY id DESC").fetchall()
-    return [dict(row) for row in rows]
+    documents = []
+    for row in rows:
+        document = dict(row)
+        document["summary"] = clean_preview_text(document.get("summary", ""))
+        documents.append(document)
+    return documents
 
 
 def delete_document(document_id: int) -> dict:
@@ -157,8 +162,31 @@ def _clean_documents(documents: list[Document]) -> list[Document]:
 
 def _summarize_chunks(chunks: list[Document]) -> str:
     text = "\n".join(chunk.page_content for chunk in chunks[:3])
-    text = re.sub(r"\s+", " ", text).strip()
-    return text[:220] or "资料已加载，等待生成课程大纲。"
+    return clean_preview_text(text) or "资料已入库，部分页面可能因扫描件或字体编码导致预览不可读。"
+
+
+def clean_preview_text(text: str) -> str:
+    cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", text or "")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"[^\w\u4e00-\u9fff，。！？、；：,.!?;:()（）《》“”\"'\-\s/%]+", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    preview = cleaned[:240].strip()
+    if is_probably_garbled(preview):
+        return "资料已入库，部分 PDF 页面可能因扫描件或字体编码导致预览不可读，但系统会尽量使用可提取文本生成学习内容。"
+    return preview[:220]
+
+
+def is_probably_garbled(text: str) -> bool:
+    if not text:
+        return True
+    if text.count("�") >= 3:
+        return True
+    readable = re.findall(r"[\w\u4e00-\u9fff，。！？、；：,.!?;:()（）《》“”\"'\-\s/%]", text)
+    readable_ratio = len(readable) / max(len(text), 1)
+    cjk_or_word = re.findall(r"[\w\u4e00-\u9fff]", text)
+    content_ratio = len(cjk_or_word) / max(len(text), 1)
+    abnormal_runs = re.search(r"[^\w\u4e00-\u9fff\s]{8,}", text)
+    return readable_ratio < 0.72 or content_ratio < 0.25 or bool(abnormal_runs)
 
 
 def _clear_learning_state(conn) -> None:
