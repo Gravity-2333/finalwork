@@ -8,6 +8,7 @@ from docx import Document as DocxDocument
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pypdf import PdfReader
 
 from .database import UPLOAD_DIR, connect
 
@@ -151,6 +152,58 @@ def outline_context(limit: int = 24) -> str:
 def chapter_context(title: str, objective: str, limit: int = 14) -> str:
     chunks = search_chunks(f"{title} {objective}", limit)
     return "\n\n".join(item["content"] for item in chunks)
+
+
+def document_outline_chapters() -> list[dict]:
+    with connect() as conn:
+        rows = conn.execute("SELECT file_path FROM documents ORDER BY id").fetchall()
+    chapters = []
+    for row in rows:
+        path = Path(row["file_path"])
+        if path.suffix.lower() != ".pdf" or not path.exists():
+            continue
+        chapters.extend(_pdf_outline_chapters(path))
+    return _dedupe_outline_chapters(chapters)
+
+
+def _pdf_outline_chapters(path: Path) -> list[dict]:
+    try:
+        reader = PdfReader(str(path))
+        raw_outline = reader.outline
+    except Exception:
+        return []
+    chapters = []
+
+    def walk(items, depth: int = 0) -> None:
+        for item in items:
+            if isinstance(item, list):
+                walk(item, depth + 1)
+                continue
+            title = getattr(item, "title", str(item)).replace("\r", "").strip()
+            if depth <= 1 and re.match(r"^第\s*[一二三四五六七八九十0-9]+\s*章", title):
+                clean_title = re.sub(r"\s+", " ", title)
+                clean_title = re.sub(r"^第\s*([一二三四五六七八九十0-9]+)\s*章\s*", r"第\1章 ", clean_title).strip()
+                chapters.append({"title": clean_title[:40], "objective": _objective_for_outline_title(clean_title)})
+
+    walk(raw_outline)
+    return chapters
+
+
+def _objective_for_outline_title(title: str) -> str:
+    topic = re.sub(r"^第\s*[一二三四五六七八九十0-9]+\s*章\s*", "", title).strip() or title
+    return f"系统学习“{topic}”相关核心概念、方法流程、典型应用和易错点，能够完成本章测验与复盘。"
+
+
+def _dedupe_outline_chapters(chapters: list[dict]) -> list[dict]:
+    result = []
+    seen = set()
+    for chapter in chapters:
+        key = chapter["title"]
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(chapter)
+    return result
 
 
 def _existing_document(filename: str) -> dict | None:

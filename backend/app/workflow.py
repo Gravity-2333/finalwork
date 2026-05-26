@@ -7,7 +7,7 @@ from typing import TypedDict
 from langgraph.graph import END, StateGraph
 
 from .database import connect, decode_options, row_to_dict
-from .knowledge import all_context, chapter_context, has_documents, knowledge_stats, outline_context, search_chunks
+from .knowledge import all_context, chapter_context, document_outline_chapters, has_documents, knowledge_stats, outline_context, search_chunks
 from .providers import call_provider
 
 
@@ -114,7 +114,8 @@ FALLBACK_QUIZ_COUNT = 6
 def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "", prompt_templates: dict[str, str] | None = None) -> dict:
     _require_documents()
     stats = knowledge_stats()
-    chapter_count = estimate_outline_size(stats["total_chunks"], stats["total_chars"])
+    source_chapters = document_outline_chapters()
+    chapter_count = len(source_chapters) if len(source_chapters) >= 4 else estimate_outline_size(stats["total_chunks"], stats["total_chars"])
     state = _graph().invoke(
         {
             "task": "outline",
@@ -127,7 +128,7 @@ def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str
             "prompt_templates": prompt_templates or {},
         }
     )
-    chapters = _parse_outline(state["result"], chapter_count)
+    chapters = _merge_outline_with_source(_parse_outline(state["result"], chapter_count), source_chapters, chapter_count)
     with connect() as conn:
         conn.execute("DELETE FROM chapters")
         conn.execute("DELETE FROM quizzes")
@@ -425,6 +426,12 @@ def _parse_outline(text: str, expected_count: int = 6) -> list[dict]:
             if len(chapters) == expected_count:
                 break
     return chapters[:expected_count]
+
+
+def _merge_outline_with_source(generated: list[dict], source: list[dict], expected_count: int) -> list[dict]:
+    if len(source) >= 4:
+        return source[:expected_count]
+    return generated[:expected_count]
 
 
 def _parse_quiz(text: str, chapter: dict) -> list[dict]:
