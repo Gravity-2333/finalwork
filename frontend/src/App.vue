@@ -640,9 +640,9 @@ async function initializeCourse() {
         const chapterIndex = chapters.value.findIndex((item) => item.id === chapter.id)
         if (chapterIndex >= 0) chapters.value[chapterIndex] = { ...chapters.value[chapterIndex], quiz_count: generatedCount }
         if (index === 0) quizzes.value = quiz.quizzes || []
-      } else if (index === 0) {
-        quizzes.value = existingQuiz.quizzes
+      } else {
         updateChapterQuizCount(chapter.id, existingQuiz.quizzes.length)
+        if (index === 0) quizzes.value = existingQuiz.quizzes
       }
     }
     selectedChapterId.value = currentChapters[0]?.id || null
@@ -762,11 +762,6 @@ async function startQuizForSelected() {
   Object.keys(answers).forEach((key) => delete answers[key])
   status.message = '测验已准备好，请完成作答。'
   activeView.value = 'quiz'
-}
-
-async function generateQuizForSelected() {
-  if (!selectedChapter.value) return
-  await generateQuizInBackground(selectedChapter.value)
 }
 
 async function submitCurrentQuiz() {

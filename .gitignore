@@ -9,6 +9,11 @@ node_modules/
 dist/
 .vite/
 
+docs/
+测试资料/
+*.docx
+大作业要求.txt
+
 data/*.db
 data/*.sqlite
 uploads/*
@@ -20,4 +25,3 @@ screenshots/*
 .env.*
 *.log
 ~$*.docx
-
