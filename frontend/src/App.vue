@@ -211,7 +211,19 @@ const modelPlaceholder = computed(() => providerDefaults[config.provider].model)
 const baseUrlPlaceholder = computed(() => providerDefaults[config.provider].base_url || '无需填写')
 const apiKeyEnvPlaceholder = computed(() => providerDefaults[config.provider].api_key_env || '环境变量名')
 
-const { listening, supported, transcript, voiceStatus, start, testMicrophone, stopMicrophoneTest, refreshMicrophoneState } = useVoiceCommands({
+const {
+  listening,
+  supported,
+  transcript,
+  voiceStatus,
+  audioInputs,
+  selectedInputDeviceId,
+  start,
+  testMicrophone,
+  stopMicrophoneTest,
+  refreshMicrophoneState,
+  selectInputDevice
+} = useVoiceCommands({
   upload: () => {
     activeView.value = 'library'
     status.message = '已切换到资料上传，请点击上传区域选择课程资料。'
@@ -937,9 +949,21 @@ function applyProviderDefaults() {
         </section>
 
         <div class="voice-diagnostics">
-          <article>
+          <article class="voice-device-card">
             <strong>麦克风</strong>
             <span>{{ voiceStatus.permission }} · {{ voiceStatus.deviceText }}</span>
+            <select
+              :value="selectedInputDeviceId"
+              :disabled="!audioInputs.length"
+              aria-label="选择麦克风输入设备"
+              @change="selectInputDevice($event.target.value)"
+            >
+              <option v-if="!audioInputs.length" value="">未发现输入设备</option>
+              <option v-for="device in audioInputs" :key="device.deviceId" :value="device.deviceId">
+                {{ device.label }}
+              </option>
+            </select>
+            <small>麦克风测试和音量监测使用所选设备；语音识别由浏览器服务接管。</small>
           </article>
           <article>
             <strong>输入音量</strong>

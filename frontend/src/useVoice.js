@@ -30,6 +30,8 @@ export function useVoiceCommands(handlers) {
   const listening = ref(false)
   const supported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
   const transcript = ref(supported ? '语音待命' : '当前浏览器不支持语音识别，可使用按钮完成相同操作。')
+  const audioInputs = ref([])
+  const selectedInputDeviceId = ref('')
   const voiceStatus = reactive({
     permission: '未测试',
     volume: 0,
@@ -51,6 +53,9 @@ export function useVoiceCommands(handlers) {
   let audioStopTimer = null
 
   refreshMicrophoneState()
+  navigator.mediaDevices?.addEventListener?.('devicechange', () => {
+    void refreshMicrophoneState()
+  })
 
   function start() {
     if (!supported) return
@@ -178,12 +183,16 @@ export function useVoiceCommands(handlers) {
 
   async function startInputMonitor(mode = 'listen', autoStopMs = 0) {
     stopInputMonitor()
+    const audioConstraints = {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true
+    }
+    if (selectedInputDeviceId.value) {
+      audioConstraints.deviceId = { exact: selectedInputDeviceId.value }
+    }
     audioStream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      }
+      audio: audioConstraints
     })
     await refreshMicrophoneState()
     voiceStatus.permission = '已授权'
@@ -244,13 +253,38 @@ export function useVoiceCommands(handlers) {
       const permission = await queryMicrophonePermission()
       if (permission) voiceStatus.permission = permission
       const devices = await navigator.mediaDevices.enumerateDevices()
-      const audioInputs = devices.filter((device) => device.kind === 'audioinput')
-      voiceStatus.deviceText = audioInputs.length ? `${audioInputs.length} 个输入设备` : '未发现输入设备'
-      if (!audioInputs.length && voiceStatus.permission !== '已拒绝') {
+      const inputs = devices.filter((device) => device.kind === 'audioinput')
+      audioInputs.value = inputs.map((device, index) => ({
+        deviceId: device.deviceId,
+        label: device.label || `麦克风 ${index + 1}`
+      }))
+      if (!selectedInputDeviceId.value && audioInputs.value[0]) {
+        selectedInputDeviceId.value = audioInputs.value[0].deviceId
+      }
+      if (selectedInputDeviceId.value && !audioInputs.value.some((device) => device.deviceId === selectedInputDeviceId.value)) {
+        selectedInputDeviceId.value = audioInputs.value[0]?.deviceId || ''
+      }
+      const selected = audioInputs.value.find((device) => device.deviceId === selectedInputDeviceId.value)
+      voiceStatus.deviceText = inputs.length ? `${inputs.length} 个输入设备 · ${selected?.label || '默认输入'}` : '未发现输入设备'
+      if (!inputs.length && voiceStatus.permission !== '已拒绝') {
         voiceStatus.diagnostic = '浏览器未发现麦克风输入设备，请检查系统默认输入设备。'
       }
     } catch {
       voiceStatus.deviceText = '无法检测'
+    }
+  }
+
+  async function selectInputDevice(deviceId) {
+    selectedInputDeviceId.value = deviceId
+    const selected = audioInputs.value.find((device) => device.deviceId === deviceId)
+    voiceStatus.deviceText = selected ? `${audioInputs.value.length} 个输入设备 · ${selected.label}` : voiceStatus.deviceText
+    voiceStatus.diagnostic = selected
+      ? `已选择输入设备：${selected.label}。麦克风测试会立即使用该设备；语音识别将使用浏览器当前可用输入。`
+      : '已切换输入设备。'
+    if (voiceStatus.testingMicrophone) {
+      await startInputMonitor('test', 8000).catch(applyMicrophoneError)
+    } else if (voiceStatus.inputMonitoring) {
+      await startInputMonitor('listen').catch(applyMicrophoneError)
     }
   }
 
@@ -306,5 +340,18 @@ export function useVoiceCommands(handlers) {
     return `语音识别错误：${error}`
   }
 
-  return { listening, supported, transcript, voiceStatus, start, stop, testMicrophone, stopMicrophoneTest, refreshMicrophoneState }
+  return {
+    listening,
+    supported,
+    transcript,
+    voiceStatus,
+    audioInputs,
+    selectedInputDeviceId,
+    start,
+    stop,
+    testMicrophone,
+    stopMicrophoneTest,
+    refreshMicrophoneState,
+    selectInputDevice
+  }
 }

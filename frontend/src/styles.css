@@ -1082,6 +1082,11 @@ pre {
   background: #fff;
 }
 
+.voice-device-card {
+  display: grid;
+  gap: 8px;
+}
+
 .voice-diagnostics strong {
   display: block;
   margin-bottom: 8px;
@@ -1093,6 +1098,22 @@ pre {
   color: #52637a;
   font-size: 14px;
   line-height: 1.45;
+}
+
+.voice-diagnostics select {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #cfdbea;
+  border-radius: 8px;
+  padding: 0 10px;
+  color: #173b72;
+  background: #f9fbfe;
+}
+
+.voice-diagnostics small {
+  color: #718096;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .volume-meter {
