@@ -120,6 +120,55 @@ def search_chunks(query: str, limit: int = 8) -> list[dict]:
     return [item for score, item in ranked[:limit] if score > 0]
 
 
+def search_knowledge(query: str, limit: int = 8) -> list[dict]:
+    normalized = re.sub(r"\s+", " ", query or "").strip()
+    if not normalized:
+        return []
+    terms = _search_terms(normalized)
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT chunks.id, chunks.document_id, chunks.content, chunks.metadata,
+                   documents.filename
+            FROM chunks
+            JOIN documents ON documents.id = chunks.document_id
+            ORDER BY chunks.id
+            """
+        ).fetchall()
+    ranked = []
+    for row in rows:
+        content = row["content"] or ""
+        lowered = content.lower()
+        score = 0
+        for term in terms:
+            if not term:
+                continue
+            count = lowered.count(term.lower())
+            if count:
+                score += count * max(len(term), 1)
+        if normalized.lower() in lowered:
+            score += len(normalized) * 3
+        if score <= 0:
+            continue
+        metadata = _decode_metadata(row["metadata"])
+        ranked.append(
+            (
+                score,
+                {
+                    "id": row["id"],
+                    "document_id": row["document_id"],
+                    "filename": row["filename"],
+                    "page": metadata.get("page"),
+                    "score": round(score, 2),
+                    "content": clean_preview_text(content) or content[:260],
+                    "metadata": metadata,
+                },
+            )
+        )
+    ranked.sort(key=lambda item: (-item[0], item[1]["id"]))
+    return [item for _, item in ranked[: max(1, min(limit, 20))]]
+
+
 def all_context(limit: int = 12) -> str:
     with connect() as conn:
         rows = conn.execute("SELECT content FROM chunks ORDER BY id LIMIT ?", (limit,)).fetchall()
@@ -245,6 +294,30 @@ def _existing_document(filename: str) -> dict | None:
     with connect() as conn:
         row = conn.execute("SELECT * FROM documents WHERE filename=? ORDER BY id DESC LIMIT 1", (filename,)).fetchone()
     return dict(row) if row else None
+
+
+def _search_terms(query: str) -> list[str]:
+    tokens = [item for item in re.split(r"\W+", query.lower()) if item]
+    cjk_terms = re.findall(r"[\u4e00-\u9fff]{2,}", query)
+    compact = re.sub(r"\s+", "", query)
+    terms = [query, compact, *tokens, *cjk_terms]
+    result = []
+    seen = set()
+    for term in terms:
+        term = term.strip().lower()
+        if not term or term in seen:
+            continue
+        seen.add(term)
+        result.append(term)
+    return result
+
+
+def _decode_metadata(value: str) -> dict:
+    try:
+        parsed = json.loads(value or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 def _next_available_path(target: Path) -> Path:

@@ -1,14 +1,16 @@
 <script setup>
-import { Database, FileUp, PauseCircle, PlayCircle, UploadCloud, Trash2 } from 'lucide-vue-next'
+import { Database, FileSearch, FileUp, PauseCircle, PlayCircle, Search, UploadCloud, Trash2 } from 'lucide-vue-next'
 
 defineProps({
   documents: { type: Array, default: () => [] },
+  searchQuery: { type: String, default: '' },
+  searchResults: { type: Array, default: () => [] },
   loading: Boolean,
   initializing: Boolean,
   initializationStep: { type: String, default: '' }
 })
 
-const emit = defineEmits(['upload', 'delete', 'clear', 'initialize', 'pause'])
+const emit = defineEmits(['upload', 'delete', 'clear', 'initialize', 'pause', 'search', 'update:searchQuery'])
 
 function onUpload(event) {
   emit('upload', event)
@@ -44,6 +46,38 @@ function onUpload(event) {
       </button>
       <small>{{ initializing ? initializationStep || '正在初始化课程' : '系统将基于已入库资料生成课程大纲、章节内容和测验。' }}</small>
     </div>
+    <section class="knowledge-search">
+      <div class="search-heading">
+        <FileSearch :size="17" />
+        <div>
+          <strong>本地知识库检索</strong>
+          <span>从已入库切片中检索关键词，结果只来自本机资料库。</span>
+        </div>
+      </div>
+      <form class="search-bar" @submit.prevent="$emit('search')">
+        <input
+          :value="searchQuery"
+          type="search"
+          placeholder="输入关键词，例如：卷积神经网络、过拟合、Keras"
+          :disabled="loading || !documents.length"
+          @input="$emit('update:searchQuery', $event.target.value)"
+        />
+        <button class="primary" :disabled="loading || !documents.length || !searchQuery.trim()">
+          <Search :size="16" />
+          检索
+        </button>
+      </form>
+      <div v-if="searchResults.length" class="search-results">
+        <article v-for="item in searchResults" :key="item.id">
+          <div>
+            <strong :title="item.filename">{{ item.filename }}</strong>
+            <span>片段 #{{ item.id }}<template v-if="item.page !== null && item.page !== undefined"> · 第 {{ Number(item.page) + 1 }} 页</template></span>
+          </div>
+          <p>{{ item.content }}</p>
+        </article>
+      </div>
+      <p v-else class="search-empty">上传资料后，可在这里检索本地专属知识库片段。</p>
+    </section>
     <div class="doc-list">
       <article v-for="doc in documents" :key="doc.id">
         <div>

@@ -26,6 +26,7 @@ import {
   listDocuments,
   listQuiz,
   listWrongAnswers,
+  searchKnowledge,
   submitQuiz,
   testProvider,
   uploadDocuments
@@ -55,6 +56,8 @@ const env = reactive({
 })
 
 const documents = ref([])
+const knowledgeQuery = ref('')
+const knowledgeResults = ref([])
 const chapters = ref([])
 const selectedChapterId = ref(null)
 const quizzes = ref([])
@@ -385,6 +388,10 @@ async function refreshHealth() {
 async function refreshDocuments() {
   const data = await listDocuments().catch(() => ({ documents: [] }))
   documents.value = data.documents
+  if (!documents.value.length) {
+    knowledgeResults.value = []
+    knowledgeQuery.value = ''
+  }
 }
 
 async function refreshChapters() {
@@ -475,6 +482,25 @@ async function handleUpload(event) {
       activeView.value = 'library'
       status.message = `${status.message} 请确认资料无误后点击“生成课程学习路径”。`
     }
+  }
+}
+
+async function runKnowledgeSearch() {
+  const query = knowledgeQuery.value.trim()
+  if (!uniqueDocuments.value.length) {
+    status.warning = '请先上传课程资料，再检索本地知识库。'
+    activeView.value = 'library'
+    return
+  }
+  if (!query) {
+    status.warning = '请输入关键词后再检索本地知识库。'
+    return
+  }
+  const data = await runTask(`正在检索本地知识库：${query}`, () => searchKnowledge(query, 8))
+  if (data) {
+    knowledgeResults.value = data.results || []
+    status.message = data.message || `本地知识库命中 ${knowledgeResults.value.length} 个片段。`
+    activeView.value = 'library'
   }
 }
 
@@ -606,6 +632,7 @@ async function removeDocument(doc) {
     await refreshDocuments()
     await refreshChapters()
     await loadWrongs()
+    knowledgeResults.value = []
     quizzes.value = []
     result.value = null
     activeView.value = 'library'
@@ -618,6 +645,8 @@ async function removeAllDocuments() {
   if (data?.ok) {
     status.message = data.message
     documents.value = []
+    knowledgeQuery.value = ''
+    knowledgeResults.value = []
     chapters.value = []
     selectedChapterId.value = null
     quizzes.value = []
@@ -884,6 +913,8 @@ function applyProviderDefaults() {
       <KnowledgePanel
         v-if="activeView === 'library'"
         :documents="uniqueDocuments"
+        :search-query="knowledgeQuery"
+        :search-results="knowledgeResults"
         :loading="status.loading"
         :initializing="courseBootstrapping"
         :initialization-step="initializationStep"
@@ -892,6 +923,8 @@ function applyProviderDefaults() {
         @clear="removeAllDocuments"
         @initialize="initializeCourse"
         @pause="pauseInitialization"
+        @update:search-query="knowledgeQuery = $event"
+        @search="runKnowledgeSearch"
       />
       <StudyPanel
         v-if="activeView === 'study'"

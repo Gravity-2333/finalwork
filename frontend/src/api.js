@@ -17,6 +17,11 @@ export function listDocuments() {
   return request('/documents')
 }
 
+export function searchKnowledge(query, limit = 8) {
+  const params = new URLSearchParams({ q: query, limit: String(limit) })
+  return request(`/knowledge/search?${params.toString()}`)
+}
+
 export function uploadDocuments(files) {
   const form = new FormData()
   files.forEach((file) => form.append('files', file))

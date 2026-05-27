@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .database import init_db
 from .face_auth import enroll_face, profile_info, verify_face
-from .knowledge import build_knowledge, clear_documents, delete_document, list_documents, save_upload
+from .knowledge import build_knowledge, clear_documents, delete_document, list_documents, save_upload, search_knowledge
 from .providers import cloud_ollama_models, test_provider
 from .workflow import (
     cancel_initialization,
@@ -79,6 +79,16 @@ def health() -> dict:
 @app.get("/api/documents")
 def documents() -> dict:
     return {"documents": list_documents()}
+
+
+@app.get("/api/knowledge/search")
+def knowledge_search(q: str = "", limit: int = 8) -> dict:
+    query = q.strip()
+    if not query:
+        return {"results": [], "message": "请输入关键词后再检索本地知识库。"}
+    results = search_knowledge(query, limit)
+    message = f"本地知识库命中 {len(results)} 个片段。" if results else "未检索到相关片段，请换一个关键词。"
+    return {"results": results, "message": message}
 
 
 @app.post("/api/documents/upload")
