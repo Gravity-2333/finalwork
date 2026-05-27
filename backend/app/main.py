@@ -12,6 +12,7 @@ from .face_auth import enroll_face, profile_info, verify_face
 from .knowledge import build_knowledge, clear_documents, delete_document, list_documents, save_upload
 from .providers import cloud_ollama_models, test_provider
 from .workflow import (
+    cancel_initialization,
     generate_chapter,
     generate_quiz,
     list_chapters,
@@ -36,6 +37,7 @@ class ProviderConfig(BaseModel):
     api_key_env: str = "DEEPSEEK_API_KEY"
     langsmith_enabled: bool = False
     prompt_templates: dict[str, str] = {}
+    initialization_id: str = ""
 
 
 class SubmitPayload(BaseModel):
@@ -137,7 +139,15 @@ async def _read_upload(file: UploadFile) -> bytes:
 def outline(config: ProviderConfig) -> dict:
     _configure_langsmith(config)
     try:
-        return run_outline(config.provider, config.model, config.base_url, config.api_key, config.api_key_env, config.prompt_templates)
+        return run_outline(
+            config.provider,
+            config.model,
+            config.base_url,
+            config.api_key,
+            config.api_key_env,
+            config.prompt_templates,
+            config.initialization_id,
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -151,7 +161,16 @@ def chapters() -> dict:
 def chapter_content(chapter_id: int, config: ProviderConfig) -> dict:
     _configure_langsmith(config)
     try:
-        return generate_chapter(chapter_id, config.provider, config.model, config.base_url, config.api_key, config.api_key_env, config.prompt_templates)
+        return generate_chapter(
+            chapter_id,
+            config.provider,
+            config.model,
+            config.base_url,
+            config.api_key,
+            config.api_key_env,
+            config.prompt_templates,
+            config.initialization_id,
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -160,9 +179,24 @@ def chapter_content(chapter_id: int, config: ProviderConfig) -> dict:
 def chapter_quiz(chapter_id: int, config: ProviderConfig) -> dict:
     _configure_langsmith(config)
     try:
-        return generate_quiz(chapter_id, config.provider, config.model, config.base_url, config.api_key, config.api_key_env, config.prompt_templates)
+        return generate_quiz(
+            chapter_id,
+            config.provider,
+            config.model,
+            config.base_url,
+            config.api_key,
+            config.api_key_env,
+            config.prompt_templates,
+            config.initialization_id,
+        )
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/initialization/{initialization_id}/cancel")
+def cancel_course_initialization(initialization_id: str) -> dict:
+    cancel_initialization(initialization_id)
+    return {"ok": True, "message": "已暂停初始化，并清空本次生成的大纲、章节内容和测验。"}
 
 
 @app.post("/api/provider/test")

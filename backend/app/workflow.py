@@ -24,6 +24,7 @@ class AssistantState(TypedDict, total=False):
     chapter_title: str
     chapter_objective: str
     prompt_templates: dict[str, str]
+    initialization_id: str
     prompt: str
     result: str
     warning: str
@@ -109,14 +110,43 @@ MIN_CHAPTERS = 4
 MAX_CHAPTERS = 10
 DEFAULT_QUIZ_COUNT = 10
 FALLBACK_QUIZ_COUNT = 6
+_CANCELLED_INITIALIZATIONS: set[str] = set()
 
 
-def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "", prompt_templates: dict[str, str] | None = None) -> dict:
+def cancel_initialization(initialization_id: str) -> None:
+    if initialization_id:
+        _CANCELLED_INITIALIZATIONS.add(initialization_id)
+    clear_generated_learning()
+
+
+def clear_generated_learning() -> None:
+    with connect() as conn:
+        conn.execute("DELETE FROM wrong_answers")
+        conn.execute("DELETE FROM quizzes")
+        conn.execute("DELETE FROM chapters")
+
+
+def _raise_if_cancelled(initialization_id: str = "") -> None:
+    if initialization_id and initialization_id in _CANCELLED_INITIALIZATIONS:
+        raise ValueError("课程初始化已暂停，已清空本次生成的大纲、章节内容和测验。")
+
+
+def run_outline(
+    provider: str,
+    model: str = "",
+    base_url: str = "",
+    api_key: str = "",
+    api_key_env: str = "",
+    prompt_templates: dict[str, str] | None = None,
+    initialization_id: str = "",
+) -> dict:
     _require_documents()
+    _raise_if_cancelled(initialization_id)
     stats = knowledge_stats()
     source_chapters = document_outline_chapters()
     chapter_count = len(source_chapters) if len(source_chapters) >= 4 else estimate_outline_size(stats["total_chunks"], stats["total_chars"])
     if len(source_chapters) >= 4:
+        _raise_if_cancelled(initialization_id)
         _replace_outline(source_chapters[:chapter_count])
         return {"chapters": list_chapters(), "warning": ""}
     state = _graph().invoke(
@@ -129,8 +159,10 @@ def run_outline(provider: str, model: str = "", base_url: str = "", api_key: str
             "api_key": api_key,
             "api_key_env": api_key_env,
             "prompt_templates": prompt_templates or {},
+            "initialization_id": initialization_id,
         }
     )
+    _raise_if_cancelled(initialization_id)
     chapters = _merge_outline_with_source(_parse_outline(state["result"], chapter_count), source_chapters, chapter_count)
     _replace_outline(chapters)
     return {"chapters": list_chapters(), "warning": state.get("warning", "")}
@@ -147,8 +179,18 @@ def _replace_outline(chapters: list[dict]) -> None:
         )
 
 
-def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "", prompt_templates: dict[str, str] | None = None) -> dict:
+def generate_chapter(
+    chapter_id: int,
+    provider: str,
+    model: str = "",
+    base_url: str = "",
+    api_key: str = "",
+    api_key_env: str = "",
+    prompt_templates: dict[str, str] | None = None,
+    initialization_id: str = "",
+) -> dict:
     _require_documents()
+    _raise_if_cancelled(initialization_id)
     state = _graph().invoke(
         {
             "task": "chapter",
@@ -159,15 +201,27 @@ def generate_chapter(chapter_id: int, provider: str, model: str = "", base_url: 
             "api_key": api_key,
             "api_key_env": api_key_env,
             "prompt_templates": prompt_templates or {},
+            "initialization_id": initialization_id,
         }
     )
+    _raise_if_cancelled(initialization_id)
     with connect() as conn:
         conn.execute("UPDATE chapters SET content=?, progress=35, status='learning' WHERE id=?", (state["result"], chapter_id))
     return {"chapter": get_chapter(chapter_id), "warning": state.get("warning", "")}
 
 
-def generate_quiz(chapter_id: int, provider: str, model: str = "", base_url: str = "", api_key: str = "", api_key_env: str = "", prompt_templates: dict[str, str] | None = None) -> dict:
+def generate_quiz(
+    chapter_id: int,
+    provider: str,
+    model: str = "",
+    base_url: str = "",
+    api_key: str = "",
+    api_key_env: str = "",
+    prompt_templates: dict[str, str] | None = None,
+    initialization_id: str = "",
+) -> dict:
     _require_documents()
+    _raise_if_cancelled(initialization_id)
     chapter = get_chapter(chapter_id)
     context = "\n\n".join(
         item
@@ -187,6 +241,7 @@ def generate_quiz(chapter_id: int, provider: str, model: str = "", base_url: str
         },
     )
     result = call_provider(provider, prompt, model, base_url, api_key, api_key_env)
+    _raise_if_cancelled(initialization_id)
     questions = _parse_quiz(result.text, chapter)
     with connect() as conn:
         conn.execute("DELETE FROM quizzes WHERE chapter_id=?", (chapter_id,))
@@ -330,6 +385,7 @@ def _compose(state: AssistantState) -> AssistantState:
 
 
 def _generate(state: AssistantState) -> AssistantState:
+    _raise_if_cancelled(state.get("initialization_id", ""))
     result = call_provider(
         state.get("provider", "mock"),
         state.get("prompt", ""),
@@ -338,6 +394,7 @@ def _generate(state: AssistantState) -> AssistantState:
         state.get("api_key", ""),
         state.get("api_key_env", ""),
     )
+    _raise_if_cancelled(state.get("initialization_id", ""))
     state["result"] = _clean_model_text(result.text, state.get("task", ""))
     state["warning"] = result.warning
     return state

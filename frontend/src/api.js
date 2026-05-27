@@ -31,11 +31,12 @@ export function clearDocuments() {
   return request('/documents', { method: 'DELETE' })
 }
 
-export function createOutline(config) {
+export function createOutline(config, options = {}) {
   return request('/outline', {
     method: 'POST',
     headers,
-    body: JSON.stringify(config)
+    body: JSON.stringify(config),
+    signal: options.signal
   })
 }
 
@@ -43,20 +44,26 @@ export function listChapters() {
   return request('/chapters')
 }
 
-export function createChapterContent(id, config) {
+export function createChapterContent(id, config, options = {}) {
   return request(`/chapters/${id}/content`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(config)
+    body: JSON.stringify(config),
+    signal: options.signal
   })
 }
 
-export function createQuiz(id, config) {
+export function createQuiz(id, config, options = {}) {
   return request(`/chapters/${id}/quiz`, {
     method: 'POST',
     headers,
-    body: JSON.stringify(config)
+    body: JSON.stringify(config),
+    signal: options.signal
   })
+}
+
+export function cancelInitialization(id) {
+  return request(`/initialization/${encodeURIComponent(id)}/cancel`, { method: 'POST' })
 }
 
 export function listQuiz(id) {

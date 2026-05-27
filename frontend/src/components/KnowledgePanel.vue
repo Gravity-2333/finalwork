@@ -1,12 +1,14 @@
 <script setup>
-import { Database, FileUp, PlayCircle, UploadCloud, Trash2 } from 'lucide-vue-next'
+import { Database, FileUp, PauseCircle, PlayCircle, UploadCloud, Trash2 } from 'lucide-vue-next'
 
 defineProps({
   documents: { type: Array, default: () => [] },
-  loading: Boolean
+  loading: Boolean,
+  initializing: Boolean,
+  initializationStep: { type: String, default: '' }
 })
 
-const emit = defineEmits(['upload', 'delete', 'clear', 'initialize'])
+const emit = defineEmits(['upload', 'delete', 'clear', 'initialize', 'pause'])
 
 function onUpload(event) {
   emit('upload', event)
@@ -32,11 +34,15 @@ function onUpload(event) {
       <small>txt / md / docx / pdf · 单批 20 个 · 单个 25MB</small>
     </label>
     <div class="library-actions">
-      <button class="primary" :disabled="loading || !documents.length" @click="$emit('initialize')">
+      <button v-if="initializing" class="danger-soft wide" @click="$emit('pause')">
+        <PauseCircle :size="16" />
+        暂停初始化
+      </button>
+      <button v-else class="primary" :disabled="loading || !documents.length" @click="$emit('initialize')">
         <PlayCircle :size="16" />
         生成课程学习路径
       </button>
-      <small>系统将基于已入库资料生成课程大纲、章节内容和测验。</small>
+      <small>{{ initializing ? initializationStep || '正在初始化课程' : '系统将基于已入库资料生成课程大纲、章节内容和测验。' }}</small>
     </div>
     <div class="doc-list">
       <article v-for="doc in documents" :key="doc.id">

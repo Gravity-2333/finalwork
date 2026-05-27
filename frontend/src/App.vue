@@ -11,6 +11,7 @@ import QuizPanel from './components/QuizPanel.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import StudyPanel from './components/StudyPanel.vue'
 import {
+  cancelInitialization,
   createChapterContent,
   createOutline,
   createQuiz,
@@ -66,6 +67,7 @@ const testMessage = ref('')
 const activeView = ref('library')
 const voiceCommandQuery = ref('')
 const courseBootstrapping = ref(false)
+const initializationStep = ref('')
 const face = reactive({ ok: false })
 const faceProfileState = reactive({ enrolled: false, username: '杨翰飞', needsUpgrade: false })
 const faceManageOpen = ref(false)
@@ -75,6 +77,8 @@ const maxUploadBytes = 25 * 1024 * 1024
 const maxUploadFiles = 20
 const promptVersion = 3
 let faceProfileLookupId = 0
+let initializationController = null
+let activeInitializationId = ''
 
 const defaultPrompts = {
   outline:
@@ -462,6 +466,44 @@ async function handleUpload(event) {
   }
 }
 
+function createInitializationId() {
+  const randomPart =
+    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return `init-${randomPart}`
+}
+
+function ensureInitializationActive(initializationId) {
+  if (initializationId !== activeInitializationId || initializationController?.signal.aborted) {
+    throw new Error('课程初始化已暂停。')
+  }
+}
+
+async function pauseInitialization() {
+  if (!courseBootstrapping.value || !activeInitializationId) return
+  const pausedId = activeInitializationId
+  initializationController?.abort()
+  status.message = '正在暂停初始化并清理本次生成内容。'
+  try {
+    await cancelInitialization(pausedId)
+  } catch (error) {
+    status.warning = `暂停清理失败：${error.message}`
+  } finally {
+    activeInitializationId = ''
+    initializationStep.value = ''
+    courseBootstrapping.value = false
+    status.loading = false
+    chapters.value = []
+    selectedChapterId.value = null
+    quizzes.value = []
+    result.value = null
+    wrongs.value = []
+    Object.keys(answers).forEach((key) => delete answers[key])
+    await refreshChapters()
+    await loadWrongs()
+    status.message = '已暂停初始化，本次生成的大纲、章节内容和测验已清空。'
+  }
+}
+
 async function initializeCourse() {
   if (!uniqueDocuments.value.length) {
     status.warning = '请先上传课程资料，再初始化课程。'
@@ -472,13 +514,18 @@ async function initializeCourse() {
     const confirmed = window.confirm('重新初始化会基于当前资料重建大纲、章节内容和测验，并清空已有测验记录。确认继续？')
     if (!confirmed) return
   }
+  const initializationId = createInitializationId()
+  activeInitializationId = initializationId
+  initializationController = new AbortController()
   courseBootstrapping.value = true
   status.loading = true
   activeView.value = 'study'
   try {
     status.message = '正在根据当前资料初始化课程。'
-    status.message = '正在生成课程大纲。'
-    const outline = await createOutline(providerPayload())
+    initializationStep.value = '正在生成课程大纲'
+    status.message = initializationStep.value
+    const outline = await createOutline(providerPayload(initializationId), { signal: initializationController.signal })
+    ensureInitializationActive(initializationId)
     if (outline?.warning) status.warning = outline.warning
     let currentChapters = outline?.chapters || []
     chapters.value = currentChapters
@@ -486,18 +533,27 @@ async function initializeCourse() {
     for (let index = 0; index < currentChapters.length; index += 1) {
       const chapter = currentChapters[index]
       if (!chapter.content) {
-        status.message = `正在生成第 ${index + 1}/${currentChapters.length} 章学习内容。`
-        const content = await createChapterContent(chapter.id, providerPayload())
+        initializationStep.value = `正在生成第 ${index + 1}/${currentChapters.length} 章学习内容`
+        status.message = `${initializationStep.value}。`
+        const content = await createChapterContent(chapter.id, providerPayload(initializationId), {
+          signal: initializationController.signal
+        })
+        ensureInitializationActive(initializationId)
         if (content?.warning) status.warning = content.warning
         const targetIndex = chapters.value.findIndex((item) => item.id === chapter.id)
         if (targetIndex >= 0) chapters.value[targetIndex] = content.chapter
         currentChapters[index] = content.chapter
       }
-      status.message = `正在检查第 ${index + 1}/${currentChapters.length} 章测验。`
+      ensureInitializationActive(initializationId)
+      initializationStep.value = `正在检查第 ${index + 1}/${currentChapters.length} 章测验`
+      status.message = `${initializationStep.value}。`
       const existingQuiz = await listQuiz(chapter.id).catch(() => ({ quizzes: [] }))
       if (!existingQuiz.quizzes?.length) {
-        status.message = `正在生成第 ${index + 1}/${currentChapters.length} 章测验。`
-        const quiz = await createQuiz(chapter.id, providerPayload())
+        ensureInitializationActive(initializationId)
+        initializationStep.value = `正在生成第 ${index + 1}/${currentChapters.length} 章测验`
+        status.message = `${initializationStep.value}。`
+        const quiz = await createQuiz(chapter.id, providerPayload(initializationId), { signal: initializationController.signal })
+        ensureInitializationActive(initializationId)
         if (quiz?.warning) status.warning = quiz.warning
         if (index === 0) quizzes.value = quiz.quizzes || []
       } else if (index === 0) {
@@ -514,10 +570,19 @@ async function initializeCourse() {
     activeView.value = 'study'
     status.message = '课程初始化完成，可直接学习章节内容或开始测验。'
   } catch (error) {
-    status.warning = `课程初始化中断：${error.message}`
+    if (initializationController?.signal.aborted || !activeInitializationId) {
+      status.warning = ''
+    } else {
+      status.warning = `课程初始化中断：${error.message}`
+    }
   } finally {
-    courseBootstrapping.value = false
-    status.loading = false
+    if (activeInitializationId === initializationId) {
+      activeInitializationId = ''
+      courseBootstrapping.value = false
+      status.loading = false
+      initializationStep.value = ''
+      initializationController = null
+    }
   }
 }
 
@@ -672,7 +737,7 @@ async function loadCloudModels() {
   }
 }
 
-function providerPayload() {
+function providerPayload(initializationId = '') {
   ensurePromptCompatibility()
   return {
     provider: config.provider,
@@ -681,6 +746,7 @@ function providerPayload() {
     api_key: config.key_mode === 'manual' ? config.api_key : '',
     api_key_env: config.key_mode === 'env' ? config.api_key_env : '',
     langsmith_enabled: config.langsmith_enabled,
+    initialization_id: initializationId,
     prompt_templates: {
       outline: appSettings.prompts.outline,
       chapter: appSettings.prompts.chapter,
@@ -773,6 +839,7 @@ function applyProviderDefaults() {
         <span :class="{ warning: status.warning }">{{ status.warning || status.message }}</span>
       </div>
       <div class="status-actions">
+        <button v-if="courseBootstrapping" class="danger-soft" @click="pauseInitialization">暂停初始化</button>
         <button @click="settingsOpen = true"><Settings :size="16" /> 系统设置</button>
         <button @click="activeView = 'settings'"><Settings :size="16" /> 模型设置</button>
       </div>
@@ -806,10 +873,13 @@ function applyProviderDefaults() {
         v-if="activeView === 'library'"
         :documents="uniqueDocuments"
         :loading="status.loading"
+        :initializing="courseBootstrapping"
+        :initialization-step="initializationStep"
         @upload="handleUpload"
         @delete="removeDocument"
         @clear="removeAllDocuments"
         @initialize="initializeCourse"
+        @pause="pauseInitialization"
       />
       <StudyPanel
         v-if="activeView === 'study'"
