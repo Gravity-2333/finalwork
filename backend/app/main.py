@@ -17,7 +17,9 @@ from .workflow import (
     generate_quiz,
     list_chapters,
     list_quizzes,
+    remove_wrong_answer_by_quiz,
     run_outline,
+    set_wrong_answer,
     submit_quiz,
     wrong_answers,
 )
@@ -42,6 +44,11 @@ class ProviderConfig(BaseModel):
 
 class SubmitPayload(BaseModel):
     answers: dict[str, str]
+
+
+class WrongAnswerPayload(BaseModel):
+    quiz_id: int
+    selected: str = ""
 
 
 class FacePayload(BaseModel):
@@ -241,6 +248,22 @@ def submit(chapter_id: int, payload: SubmitPayload) -> dict:
 @app.get("/api/wrong-answers")
 def wrong_answer_list() -> dict:
     return {"wrong_answers": wrong_answers()}
+
+
+@app.post("/api/wrong-answers")
+def add_wrong_answer(payload: WrongAnswerPayload) -> dict:
+    try:
+        return set_wrong_answer(payload.quiz_id, payload.selected)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/wrong-answers/by-quiz/{quiz_id}")
+def remove_wrong_answer(quiz_id: int) -> dict:
+    try:
+        return remove_wrong_answer_by_quiz(quiz_id)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/api/face/profile")

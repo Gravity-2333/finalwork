@@ -87,6 +87,18 @@ export function listWrongAnswers() {
   return request('/wrong-answers')
 }
 
+export function addWrongAnswer(quizId, selected = '') {
+  return request('/wrong-answers', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ quiz_id: quizId, selected })
+  })
+}
+
+export function removeWrongAnswerByQuiz(quizId) {
+  return request(`/wrong-answers/by-quiz/${quizId}`, { method: 'DELETE' })
+}
+
 export function testProvider(config) {
   return request('/provider/test', {
     method: 'POST',

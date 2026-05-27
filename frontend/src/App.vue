@@ -11,6 +11,7 @@ import QuizPanel from './components/QuizPanel.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import StudyPanel from './components/StudyPanel.vue'
 import {
+  addWrongAnswer,
   cancelInitialization,
   createChapterContent,
   createOutline,
@@ -26,6 +27,7 @@ import {
   listDocuments,
   listQuiz,
   listWrongAnswers,
+  removeWrongAnswerByQuiz,
   searchKnowledge,
   submitQuiz,
   testProvider,
@@ -61,6 +63,7 @@ const knowledgeResults = ref([])
 const chapters = ref([])
 const selectedChapterId = ref(null)
 const quizzes = ref([])
+const quizGeneratingIds = ref([])
 const answers = reactive({})
 const result = ref(null)
 const wrongs = ref([])
@@ -140,7 +143,6 @@ const uniqueDocuments = computed(() => {
     return true
   })
 })
-const visibleWrongs = computed(() => wrongs.value.slice(0, 3))
 const navItems = [
   { id: 'library', label: '知识库', icon: FolderOpen },
   { id: 'study', label: '学习路径', icon: BookOpen },
@@ -261,8 +263,8 @@ const {
   quiz: () => {
     if (!chapters.value.length) return voiceGuard('请先生成课程大纲，再开始测验。', 'study')
     if (!selectedChapter.value) return voiceGuard('请先选择一个章节，再开始测验。', 'study')
-    void generateQuizForSelected()
-    return { message: '正在生成当前章节测验。' }
+    void startQuizForSelected()
+    return { message: selectedChapter.value.quiz_count ? '正在打开当前章节测验。' : '当前章节测验尚未生成完成。' }
   },
   wrong: async () => {
     await loadWrongs()
@@ -362,6 +364,12 @@ watch(
     testMessage.value = ''
   }
 )
+
+watch(selectedChapterId, async (chapterId) => {
+  if (!chapterId || result.value) return
+  const data = await listQuiz(chapterId).catch(() => ({ quizzes: [] }))
+  quizzes.value = data.quizzes || []
+})
 
 async function runTask(message, task) {
   status.loading = true
@@ -516,6 +524,40 @@ function ensureInitializationActive(initializationId) {
   }
 }
 
+function setQuizGenerating(chapterId, active) {
+  const ids = new Set(quizGeneratingIds.value)
+  if (active) ids.add(chapterId)
+  else ids.delete(chapterId)
+  quizGeneratingIds.value = Array.from(ids)
+}
+
+function updateChapterQuizCount(chapterId, count) {
+  const index = chapters.value.findIndex((chapter) => chapter.id === chapterId)
+  if (index >= 0) chapters.value[index] = { ...chapters.value[index], quiz_count: count }
+}
+
+async function generateQuizInBackground(chapter) {
+  if (!chapter?.id || quizGeneratingIds.value.includes(chapter.id)) return
+  setQuizGenerating(chapter.id, true)
+  try {
+    const existingQuiz = await listQuiz(chapter.id).catch(() => ({ quizzes: [] }))
+    if (existingQuiz.quizzes?.length) {
+      updateChapterQuizCount(chapter.id, existingQuiz.quizzes.length)
+      if (selectedChapterId.value === chapter.id && !result.value) quizzes.value = existingQuiz.quizzes
+      return
+    }
+    const quiz = await createQuiz(chapter.id, providerPayload())
+    const generated = quiz?.quizzes || []
+    updateChapterQuizCount(chapter.id, generated.length)
+    if (selectedChapterId.value === chapter.id && !result.value) quizzes.value = generated
+    status.message = `《${chapter.title}》测验已在后台生成。`
+  } catch (error) {
+    if (selectedChapterId.value === chapter.id) status.warning = `测验生成失败：${error.message}`
+  } finally {
+    setQuizGenerating(chapter.id, false)
+  }
+}
+
 async function pauseInitialization() {
   if (!courseBootstrapping.value || !activeInitializationId) return
   const pausedId = activeInitializationId
@@ -593,9 +635,14 @@ async function initializeCourse() {
         const quiz = await createQuiz(chapter.id, providerPayload(initializationId), { signal: initializationController.signal })
         ensureInitializationActive(initializationId)
         if (quiz?.warning) status.warning = quiz.warning
+        const generatedCount = quiz.quizzes?.length || 0
+        currentChapters[index] = { ...currentChapters[index], quiz_count: generatedCount }
+        const chapterIndex = chapters.value.findIndex((item) => item.id === chapter.id)
+        if (chapterIndex >= 0) chapters.value[chapterIndex] = { ...chapters.value[chapterIndex], quiz_count: generatedCount }
         if (index === 0) quizzes.value = quiz.quizzes || []
       } else if (index === 0) {
         quizzes.value = existingQuiz.quizzes
+        updateChapterQuizCount(chapter.id, existingQuiz.quizzes.length)
       }
     }
     selectedChapterId.value = currentChapters[0]?.id || null
@@ -667,7 +714,7 @@ async function handleNextAction() {
     if (!selectedChapterId.value && chapters.value[0]) selectedChapterId.value = chapters.value[0].id
     if (selectedChapter.value) await generateContent(selectedChapter.value)
   } else if (nextAction.value.task === 'quiz') {
-    await generateQuizForSelected()
+    await startQuizForSelected()
   }
 }
 
@@ -691,22 +738,35 @@ async function generateContent(chapter) {
   )
   if (data) {
     const index = chapters.value.findIndex((item) => item.id === chapter.id)
-    chapters.value[index] = data.chapter
+    if (index >= 0) chapters.value[index] = { ...chapters.value[index], ...data.chapter }
     selectedChapterId.value = chapter.id
-    status.message = '章节内容已生成，学习进度已记录。'
+    status.message = '章节内容已生成，正在后台生成本章测验。'
+    void generateQuizInBackground(data.chapter)
   }
+}
+
+async function startQuizForSelected() {
+  if (!selectedChapter.value) return
+  if (quizGeneratingIds.value.includes(selectedChapter.value.id)) {
+    status.warning = '当前章节测验正在后台生成，请稍后再开始测验。'
+    return
+  }
+  const data = await runTask('正在打开在线测验...', () => listQuiz(selectedChapter.value.id))
+  const existing = data?.quizzes || []
+  if (!existing.length) {
+    status.warning = '当前章节测验尚未生成完成，请等待后台生成后再开始测验。'
+    return
+  }
+  quizzes.value = existing
+  result.value = null
+  Object.keys(answers).forEach((key) => delete answers[key])
+  status.message = '测验已准备好，请完成作答。'
+  activeView.value = 'quiz'
 }
 
 async function generateQuizForSelected() {
   if (!selectedChapter.value) return
-  const data = await runTask('正在生成在线测验...', () => createQuiz(selectedChapter.value.id, providerPayload()))
-  if (data) {
-    quizzes.value = data.quizzes
-    result.value = null
-    Object.keys(answers).forEach((key) => delete answers[key])
-    status.message = '测验已生成，请完成作答。'
-    activeView.value = 'quiz'
-  }
+  await generateQuizInBackground(selectedChapter.value)
 }
 
 async function submitCurrentQuiz() {
@@ -715,16 +775,38 @@ async function submitCurrentQuiz() {
   if (data) {
     result.value = data
     const index = chapters.value.findIndex((item) => item.id === data.chapter.id)
-    chapters.value[index] = data.chapter
+    if (index >= 0) chapters.value[index] = { ...chapters.value[index], ...data.chapter }
     status.message = `测验完成：${data.score}/${data.total}，错题已自动归档。`
     await loadWrongs()
+    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }))
   }
 }
 
 async function retryCurrentQuiz() {
   Object.keys(answers).forEach((key) => delete answers[key])
   result.value = null
-  if (selectedChapter.value) await generateQuizForSelected()
+  if (selectedChapter.value) {
+    const data = await listQuiz(selectedChapter.value.id).catch(() => ({ quizzes: [] }))
+    quizzes.value = data.quizzes || []
+    status.message = quizzes.value.length ? '已重置本次作答，请重新完成测验。' : '当前章节测验尚未生成完成。'
+  }
+}
+
+async function toggleWrongForQuestion(item) {
+  if (!item?.id) return
+  const inArchive = Boolean(item.wrong_answer_id)
+  const data = await runTask(inArchive ? '正在从错题归档移除...' : '正在加入错题归档...', () =>
+    inArchive ? removeWrongAnswerByQuiz(item.id) : addWrongAnswer(item.id, item.selected || '')
+  )
+  if (!data) return
+  const details = result.value?.details || []
+  const index = details.findIndex((quiz) => quiz.id === item.id)
+  if (index >= 0) {
+    details[index] = { ...details[index], wrong_answer_id: inArchive ? null : data.wrong_answer_id }
+    result.value = { ...result.value, details: [...details] }
+  }
+  await loadWrongs()
+  status.message = data.message
 }
 
 function studyNextChapter() {
@@ -931,11 +1013,12 @@ function applyProviderDefaults() {
         :chapters="chapters"
         :selected-chapter="selectedChapter"
         :selected-chapter-id="selectedChapterId"
+        :quiz-generating-ids="quizGeneratingIds"
         :loading="status.loading"
         @outline="generateOutline"
         @select="selectedChapterId = $event"
         @content="generateContent"
-        @quiz="generateQuizForSelected"
+        @quiz="startQuizForSelected"
         @wrong="activeView = 'quiz'"
       />
       <QuizPanel
@@ -943,13 +1026,13 @@ function applyProviderDefaults() {
         :quizzes="quizzes"
         :answers="answers"
         :result="result"
-        :wrongs="visibleWrongs"
         :loading="status.loading"
         @submit="submitCurrentQuiz"
         @study="activeView = 'study'"
         @review="activeView = 'quiz'"
         @retry="retryCurrentQuiz"
         @next="studyNextChapter"
+        @toggle-wrong="toggleWrongForQuestion"
       />
       <section v-if="activeView === 'voice'" class="voice-page">
         <header class="voice-hero">

@@ -1,15 +1,27 @@
 <script setup>
 import { BrainCircuit, Play, RefreshCw, Trophy } from 'lucide-vue-next'
 import MarkdownBlock from './MarkdownBlock.vue'
+import { computed } from 'vue'
 
-defineProps({
+const props = defineProps({
   chapters: { type: Array, default: () => [] },
   selectedChapter: { type: Object, default: null },
   selectedChapterId: { type: Number, default: null },
+  quizGeneratingIds: { type: Array, default: () => [] },
   loading: Boolean
 })
 
 defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
+
+const selectedQuizGenerating = computed(() => props.selectedChapter && props.quizGeneratingIds.includes(props.selectedChapter.id))
+const selectedQuizReady = computed(() => Number(props.selectedChapter?.quiz_count || 0) > 0)
+const quizBlockedReason = computed(() => {
+  if (!props.selectedChapter) return '请先选择章节'
+  if (selectedQuizGenerating.value) return '测验正在后台生成'
+  if (!props.selectedChapter.content) return '请先生成章节内容'
+  if (!selectedQuizReady.value) return '测验尚未生成完成'
+  return ''
+})
 </script>
 
 <template>
@@ -18,10 +30,11 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
       <button class="primary" :disabled="loading" @click="$emit('outline')">
         <RefreshCw :size="17" /> {{ chapters.length ? '重新生成大纲' : '生成课程大纲' }}
       </button>
-      <button :disabled="loading || !selectedChapter" @click="$emit('quiz')">
+      <button :disabled="loading || Boolean(quizBlockedReason)" :title="quizBlockedReason" @click="$emit('quiz')">
         <Play :size="17" /> 开始测验
       </button>
       <button :disabled="loading" @click="$emit('wrong')"><Trophy :size="17" /> 查看错题</button>
+      <span v-if="quizBlockedReason" class="toolbar-hint">{{ quizBlockedReason }}</span>
     </div>
 
     <div v-if="!chapters.length" class="empty-state">
@@ -41,6 +54,8 @@ defineEmits(['outline', 'select', 'content', 'quiz', 'wrong'])
         >
           <div>
             <span>{{ chapter.content ? '已生成' : '待学习' }}</span>
+            <small v-if="quizGeneratingIds.includes(chapter.id)">测验生成中</small>
+            <small v-else-if="chapter.quiz_count">测验已就绪</small>
             <h3>{{ chapter.title }}</h3>
             <p>{{ chapter.objective }}</p>
           </div>

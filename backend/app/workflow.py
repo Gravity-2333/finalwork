@@ -269,14 +269,19 @@ def submit_quiz(chapter_id: int, answers: dict[str, str]) -> dict:
         raise ValueError("当前章节暂无测验，请先生成测验题目。")
     score = 0
     details = []
+    quiz_ids = [quiz["id"] for quiz in quizzes]
     with connect() as conn:
+        placeholders = ",".join("?" for _ in quiz_ids)
+        conn.execute(f"DELETE FROM wrong_answers WHERE quiz_id IN ({placeholders})", quiz_ids)
         for quiz in quizzes:
             selected = answers.get(str(quiz["id"]), "")
             correct = selected == quiz["answer"]
             score += 1 if correct else 0
+            wrong_answer_id = None
             if not correct:
-                conn.execute("INSERT INTO wrong_answers(quiz_id, selected) VALUES (?, ?)", (quiz["id"], selected))
-            details.append({**quiz, "selected": selected, "correct": correct})
+                cursor = conn.execute("INSERT INTO wrong_answers(quiz_id, selected) VALUES (?, ?)", (quiz["id"], selected))
+                wrong_answer_id = cursor.lastrowid
+            details.append({**quiz, "selected": selected, "correct": correct, "wrong_answer_id": wrong_answer_id})
         progress = 100 if score == len(quizzes) else max(60, int(score / max(len(quizzes), 1) * 100))
         conn.execute(
             "UPDATE chapters SET progress=?, status=? WHERE id=?",
@@ -300,7 +305,16 @@ def submit_quiz(chapter_id: int, answers: dict[str, str]) -> dict:
 
 def list_chapters() -> list[dict]:
     with connect() as conn:
-        rows = conn.execute("SELECT * FROM chapters ORDER BY id").fetchall()
+        rows = conn.execute(
+            """
+            SELECT chapters.*,
+                   COUNT(quizzes.id) AS quiz_count
+            FROM chapters
+            LEFT JOIN quizzes ON quizzes.chapter_id = chapters.id
+            GROUP BY chapters.id
+            ORDER BY chapters.id
+            """
+        ).fetchall()
     return [row_to_dict(row) for row in rows]
 
 
@@ -333,6 +347,24 @@ def wrong_answers() -> list[dict]:
             """
         ).fetchall()
     return [{**row_to_dict(row), "options": decode_options(row["options"])} for row in rows]
+
+
+def set_wrong_answer(quiz_id: int, selected: str = "") -> dict:
+    with connect() as conn:
+        quiz = conn.execute("SELECT * FROM quizzes WHERE id=?", (quiz_id,)).fetchone()
+        if not quiz:
+            raise ValueError("题目不存在，无法加入错题归档。")
+        existing = conn.execute("SELECT * FROM wrong_answers WHERE quiz_id=? ORDER BY id DESC LIMIT 1", (quiz_id,)).fetchone()
+        if existing:
+            return {"ok": True, "wrong_answer_id": existing["id"], "message": "该题已在错题归档中。"}
+        cursor = conn.execute("INSERT INTO wrong_answers(quiz_id, selected) VALUES (?, ?)", (quiz_id, selected))
+        return {"ok": True, "wrong_answer_id": cursor.lastrowid, "message": "已加入错题归档。"}
+
+
+def remove_wrong_answer_by_quiz(quiz_id: int) -> dict:
+    with connect() as conn:
+        cursor = conn.execute("DELETE FROM wrong_answers WHERE quiz_id=?", (quiz_id,))
+    return {"ok": True, "removed": cursor.rowcount, "message": "已从错题归档移除。"}
 
 
 def _require_documents() -> None:
