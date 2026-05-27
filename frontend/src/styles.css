@@ -662,7 +662,6 @@ button.danger-soft:hover:not(:disabled) {
 
 .upload-box small,
 .empty,
-.wrong-list small,
 .doc-list span {
   color: #718096;
 }
@@ -778,8 +777,7 @@ button.danger-soft:hover:not(:disabled) {
 
 .doc-list,
 .chapter-grid,
-.quiz-list,
-.wrong-list {
+.quiz-list {
   display: grid;
   gap: 10px;
   margin-top: 14px;
@@ -792,8 +790,7 @@ button.danger-soft:hover:not(:disabled) {
 
 .doc-list article,
 .chapter-card,
-.quiz-list article,
-.wrong-list article {
+.quiz-list article {
   border: 1px solid #dbe5f0;
   border-radius: 8px;
   padding: 12px;
@@ -813,8 +810,7 @@ button.danger-soft:hover:not(:disabled) {
   flex: 1 1 auto;
 }
 
-.doc-list strong,
-.wrong-list strong {
+.doc-list strong {
   display: block;
   min-width: 0;
   color: #173b72;
@@ -827,8 +823,7 @@ button.danger-soft:hover:not(:disabled) {
   font-size: 14px;
 }
 
-.chapter-card p,
-.wrong-list p {
+.chapter-card p {
   min-width: 0;
   margin: 7px 0 0;
   color: #5d6d83;
@@ -875,8 +870,7 @@ button.danger-soft:hover:not(:disabled) {
 }
 
 .chapter-card h3,
-.quiz-list h3,
-.wrong-list h3 {
+.quiz-list h3 {
   min-width: 0;
   margin: 0;
   font-size: 16px;
@@ -1068,57 +1062,6 @@ pre {
   color: #334155;
   line-height: 1.6;
   overflow-wrap: anywhere;
-}
-
-.answer-review {
-  min-width: 0;
-  display: grid;
-  gap: 10px;
-}
-
-.answer-review article {
-  min-width: 0;
-  padding: 10px;
-  border: 1px solid #c7d5e7;
-  border-radius: var(--radius-sm);
-  background: #fff;
-}
-
-.answer-review article.correct {
-  border-color: #86efac;
-}
-
-.answer-review article.wrong {
-  border-color: #fecaca;
-}
-
-.answer-review small {
-  display: block;
-  margin-top: 4px;
-  overflow-wrap: anywhere;
-}
-
-.wrong-list strong {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.wrong-list small {
-  display: block;
-  margin-top: 5px;
-}
-
-.wrong-list .explanation {
-  margin-top: 8px;
-  padding: 10px;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-soft);
-}
-
-.wrong-list .review-advice {
-  margin-top: 8px;
-  color: #475569;
 }
 
 .voice-page {
@@ -1859,8 +1802,7 @@ button svg {
 
 .doc-list article,
 .chapter-card,
-.quiz-list article,
-.wrong-list article {
+.quiz-list article {
   min-width: 0;
   border-color: var(--color-border);
   border-radius: var(--radius-md);
