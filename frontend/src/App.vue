@@ -51,6 +51,41 @@ const config = reactive({
   langsmith_enabled: false
 })
 
+const providerConfigs = reactive({
+  mock: {
+    model: 'mock-assistant',
+    base_url: '',
+    key_mode: 'env',
+    api_key: '',
+    api_key_env: '',
+    langsmith_enabled: false
+  },
+  local_ollama: {
+    model: 'qwen2.5:7b',
+    base_url: 'http://localhost:11434',
+    key_mode: 'env',
+    api_key: '',
+    api_key_env: '',
+    langsmith_enabled: false
+  },
+  cloud_ollama: {
+    model: 'qwen3-coder-next',
+    base_url: 'https://ollama.com/v1',
+    key_mode: 'env',
+    api_key: '',
+    api_key_env: 'OLLAMA_API_KEY',
+    langsmith_enabled: false
+  },
+  openai_compatible: {
+    model: 'deepseek-chat',
+    base_url: 'https://api.deepseek.com/v1',
+    key_mode: 'env',
+    api_key: '',
+    api_key_env: 'DEEPSEEK_API_KEY',
+    langsmith_enabled: false
+  }
+})
+
 const env = reactive({
   langsmith_ready: false,
   ollama_key_ready: false,
@@ -359,8 +394,9 @@ onMounted(async () => {
 
 watch(
   () => config.provider,
-  () => {
-    applyProviderDefaults()
+  (provider, previousProvider) => {
+    saveProviderConfig(previousProvider)
+    loadProviderConfig(provider)
     testMessage.value = ''
   }
 )
@@ -845,11 +881,14 @@ async function loadCloudModels() {
     const data = await runTask('正在获取并测试云端 Ollama 模型...', () => listCloudOllamaModels(providerPayload()))
     if (data?.models?.length) {
       cloudModels.value = data.models
-      config.model = data.models[0].id
+      const savedModel = providerConfigs.cloud_ollama.model
+      config.model = data.models.some((model) => model.id === savedModel) ? savedModel : data.models[0].id
+      saveProviderConfig('cloud_ollama')
       status.message = `已获取 ${data.models.length} 个可用云端 Ollama 模型。`
     } else if (data) {
       cloudModels.value = []
       config.model = ''
+      saveProviderConfig('cloud_ollama')
       status.warning = '云端 Ollama 暂无已测试可用的项目模型，请检查账号权限或更换 API Key。'
     }
   } finally {
@@ -859,6 +898,7 @@ async function loadCloudModels() {
 
 function providerPayload(initializationId = '') {
   ensurePromptCompatibility()
+  saveProviderConfig(config.provider)
   return {
     provider: config.provider,
     model: config.model,
@@ -917,15 +957,34 @@ function voiceGuard(message, view) {
 }
 
 function applyProviderDefaults() {
-  const defaults = providerDefaults[config.provider]
-  const knownModels = Object.values(providerDefaults).map((item) => item.model)
-  const knownBaseUrls = Object.values(providerDefaults).map((item) => item.base_url)
-  const knownKeyEnvs = Object.values(providerDefaults).map((item) => item.api_key_env)
-  if (!config.model || knownModels.includes(config.model)) config.model = defaults.model
-  if (!config.base_url || knownBaseUrls.includes(config.base_url)) config.base_url = defaults.base_url
-  if (!config.api_key_env || knownKeyEnvs.includes(config.api_key_env)) config.api_key_env = defaults.api_key_env
-  if (config.provider === 'mock' || config.provider === 'local_ollama') config.api_key = ''
-  if (config.provider === 'cloud_ollama' && !cloudModels.value.length) config.model = ''
+  loadProviderConfig(config.provider)
+}
+
+function saveProviderConfig(provider = config.provider) {
+  if (!provider || !providerConfigs[provider]) return
+  Object.assign(providerConfigs[provider], {
+    model: config.model,
+    base_url: config.base_url,
+    key_mode: config.key_mode,
+    api_key: config.api_key,
+    api_key_env: config.api_key_env,
+    langsmith_enabled: config.langsmith_enabled
+  })
+}
+
+function loadProviderConfig(provider = config.provider) {
+  const defaults = providerDefaults[provider]
+  const saved = providerConfigs[provider]
+  if (!defaults || !saved) return
+  config.model = saved.model || defaults.model
+  config.base_url = saved.base_url || defaults.base_url
+  config.key_mode = saved.key_mode || 'env'
+  config.api_key = provider === 'mock' || provider === 'local_ollama' ? '' : saved.api_key || ''
+  config.api_key_env = saved.api_key_env || defaults.api_key_env
+  config.langsmith_enabled = Boolean(saved.langsmith_enabled)
+  if (provider === 'cloud_ollama' && cloudModels.value.length && !cloudModels.value.some((model) => model.id === config.model)) {
+    config.model = cloudModels.value[0].id
+  }
 }
 </script>
 
