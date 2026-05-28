@@ -42,14 +42,16 @@ async def recognize_pcm_with_xfyun(audio: bytes) -> dict:
     url = _signed_url(api_key, api_secret)
     text_parts: list[str] = []
     try:
-        async with websockets.connect(url, ping_interval=None, close_timeout=3) as websocket:
+        async with websockets.connect(url, close_timeout=5) as websocket:
             chunks = list(_chunks(audio, 1280))
             for index, chunk in enumerate(chunks):
-                status = 0 if index == 0 else 2 if index == len(chunks) - 1 else 1
-                if len(chunks) == 1:
+                if index == 0:
                     status = 0
+                elif index == len(chunks) - 1:
+                    status = 2
+                else:
+                    status = 1
                 await websocket.send(json.dumps(_frame(app_id, chunk, status), ensure_ascii=False))
-                await asyncio.sleep(0.04)
             if len(chunks) == 1:
                 await websocket.send(json.dumps(_frame(app_id, b"", 2), ensure_ascii=False))
             while True:
