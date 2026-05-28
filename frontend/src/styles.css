@@ -1469,6 +1469,7 @@ pre {
 }
 
 .settings-section input,
+.settings-section select,
 .settings-section textarea {
   width: 100%;
   border: 1px solid #cfdbea;
@@ -1477,6 +1478,16 @@ pre {
   color: #27364b;
   padding: 9px 10px;
   font: inherit;
+}
+
+.settings-section select {
+  min-height: 42px;
+  appearance: none;
+  padding-right: 36px;
+  background:
+    linear-gradient(45deg, transparent 50%, #173b72 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
+    linear-gradient(135deg, #173b72 50%, transparent 50%) calc(100% - 13px) 50% / 6px 6px no-repeat,
+    #fff;
 }
 
 .settings-section textarea {

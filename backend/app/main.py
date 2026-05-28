@@ -23,6 +23,7 @@ from .workflow import (
     submit_quiz,
     wrong_answers,
 )
+from .xfyun_asr import AsrError, recognize_pcm_with_xfyun, xfyun_ready
 
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -80,6 +81,7 @@ def health() -> dict:
         "langsmith_ready": bool(os.getenv("LANGSMITH_API_KEY")),
         "ollama_key_ready": bool(os.getenv("OLLAMA_API_KEY")),
         "deepseek_key_ready": bool(os.getenv("DEEPSEEK_API_KEY")),
+        "xfyun_ready": xfyun_ready(),
     }
 
 
@@ -230,6 +232,19 @@ def provider_cloud_ollama_models(config: ProviderConfig) -> dict:
         return {"models": cloud_ollama_models(config.base_url, config.api_key, config.api_key_env)}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/asr/recognize")
+async def asr_recognize(file: UploadFile = File(...)) -> dict:
+    try:
+        audio = await file.read(8 * 1024 * 1024 + 1)
+        if len(audio) > 8 * 1024 * 1024:
+            raise AsrError("单次语音不能超过 8MB，请缩短录音后重试。")
+        return await recognize_pcm_with_xfyun(audio)
+    except AsrError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"语音识别失败：{exc}") from exc
 
 
 @app.get("/api/chapters/{chapter_id}/quiz")

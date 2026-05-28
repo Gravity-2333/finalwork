@@ -42,6 +42,7 @@ import {
   listQuiz,
   listWrongAnswers,
   removeWrongAnswerByQuiz,
+  recognizeSpeech,
   searchKnowledge,
   submitQuiz,
   testProvider,
@@ -103,7 +104,8 @@ const providerConfigs = reactive({
 const env = reactive({
   langsmith_ready: false,
   ollama_key_ready: false,
-  deepseek_key_ready: false
+  deepseek_key_ready: false,
+  xfyun_ready: false
 })
 
 const documents = ref([])
@@ -149,6 +151,9 @@ const appSettings = reactive({
   upload: {
     maxFiles: maxUploadFiles,
     maxSizeText: '25MB'
+  },
+  voice: {
+    provider: 'web_speech'
   },
   prompts: {
     outline: defaultPrompts.outline,
@@ -266,6 +271,7 @@ const providerHint = computed(() => providerDefaults[config.provider].hint)
 const modelPlaceholder = computed(() => providerDefaults[config.provider].model)
 const baseUrlPlaceholder = computed(() => providerDefaults[config.provider].base_url || '无需填写')
 const apiKeyEnvPlaceholder = computed(() => providerDefaults[config.provider].api_key_env || '环境变量名')
+const voiceProvider = computed(() => appSettings.voice.provider)
 
 const {
   listening,
@@ -375,10 +381,14 @@ const {
     activeView.value = 'settings'
     status.message = '已通过语音切换到 OpenAI 兼容模型。'
     return { message: '已切换到 OpenAI 兼容模型。' }
-  }
+  },
+  recognizeSpeech
+}, {
+  voiceProvider
 })
 
 const voiceModeText = computed(() => (listening.value ? '正在监听' : voiceStatus.testingMicrophone ? '麦克风测试中' : '待命'))
+const voiceProviderLabel = computed(() => (appSettings.voice.provider === 'xfyun' ? '讯飞 API 服务' : '浏览器 Web Speech'))
 const voiceDetail = computed(() => (voiceStatus.diagnostic === transcript.value ? '' : voiceStatus.diagnostic))
 const recommendedVoiceCommands = computed(() =>
   VOICE_COMMAND_GROUPS.flatMap((group) => group.items).filter((command) =>
@@ -958,19 +968,20 @@ function loadSettings() {
   try {
     const saved = JSON.parse(raw)
     if (saved.promptVersion !== promptVersion) {
-      localStorage.setItem('ai-study-settings', JSON.stringify({ promptVersion, prompts: appSettings.prompts }))
+      localStorage.setItem('ai-study-settings', JSON.stringify({ promptVersion, prompts: appSettings.prompts, voice: appSettings.voice }))
       return
     }
     Object.assign(appSettings.prompts, saved.prompts || {})
+    Object.assign(appSettings.voice, saved.voice || {})
   } catch {
     localStorage.removeItem('ai-study-settings')
   }
 }
 
 function saveSettings() {
-  localStorage.setItem('ai-study-settings', JSON.stringify({ promptVersion, prompts: appSettings.prompts }))
+  localStorage.setItem('ai-study-settings', JSON.stringify({ promptVersion, prompts: appSettings.prompts, voice: appSettings.voice }))
   settingsOpen.value = false
-  status.message = '系统设置已保存，后续 AI 生成会使用当前提示词模板。'
+  status.message = '系统设置已保存，后续会使用当前语音识别方式和提示词模板。'
 }
 
 function resetPrompts() {
@@ -1157,7 +1168,7 @@ function loadProviderConfig(provider = config.provider) {
             <MessageCircle :size="22" />
             <div>
               <strong>{{ transcript }}</strong>
-              <span v-if="voiceDetail">{{ voiceDetail }}</span>
+              <span>{{ voiceProviderLabel }} · {{ voiceDetail || '等待语音指令。' }}</span>
             </div>
           </div>
           <div class="voice-actions">
@@ -1198,6 +1209,10 @@ function loadProviderConfig(provider = config.provider) {
           <article>
             <strong>执行状态</strong>
             <span>{{ voiceStatus.matchedCommand ? '已命中' : '未命中' }}</span>
+          </article>
+          <article>
+            <strong>识别服务</strong>
+            <span>{{ voiceProviderLabel }}{{ appSettings.voice.provider === 'xfyun' ? ` · ${env.xfyun_ready ? '已配置' : '未配置凭证'}` : '' }}</span>
           </article>
         </div>
 

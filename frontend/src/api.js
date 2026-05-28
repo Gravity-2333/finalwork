@@ -115,6 +115,12 @@ export function listCloudOllamaModels(config) {
   })
 }
 
+export function recognizeSpeech(audioBlob) {
+  const form = new FormData()
+  form.append('file', audioBlob, 'speech.pcm')
+  return request('/asr/recognize', { method: 'POST', body: form })
+}
+
 export function faceProfile(username = '杨翰飞') {
   return request(`/face/profile?username=${encodeURIComponent(username)}`)
 }

@@ -1,4 +1,4 @@
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 
 const COMMANDS = [
   { name: '上传资料', keywords: ['上传资料', '上传文件', '添加资料', '资料上传'], action: 'upload', type: 'navigate', description: '打开知识库上传区。' },
@@ -26,10 +26,11 @@ export const VOICE_COMMAND_GROUPS = [
   { title: '自动执行', items: COMMANDS.filter((command) => command.type === 'execute') }
 ]
 
-export function useVoiceCommands(handlers) {
+export function useVoiceCommands(handlers, options = {}) {
   const listening = ref(false)
-  const supported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
-  const transcript = ref(supported ? '语音待命' : '当前浏览器不支持语音识别，可使用按钮完成相同操作。')
+  const browserSpeechSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
+  const supported = computed(() => voiceProvider() === 'xfyun' || browserSpeechSupported)
+  const transcript = ref(browserSpeechSupported ? '语音待命' : '当前浏览器不支持 Web Speech，可切换讯飞 API 服务或使用按钮。')
   const audioInputs = ref([])
   const selectedInputDeviceId = ref('')
   const voiceStatus = reactive({
@@ -38,7 +39,7 @@ export function useVoiceCommands(handlers) {
     volumeText: '未测试',
     lastText: '',
     matchedCommand: '',
-    diagnostic: supported ? '点击开始语音识别或麦克风测试。' : '浏览器不支持 Web Speech API。',
+    diagnostic: browserSpeechSupported ? '点击开始语音识别或麦克风测试。' : '浏览器不支持 Web Speech API，可切换讯飞 API 服务。',
     testingMicrophone: false,
     inputMonitoring: false,
     deviceText: '未检测'
@@ -51,6 +52,10 @@ export function useVoiceCommands(handlers) {
   let audioStream = null
   let audioTimer = null
   let audioStopTimer = null
+  let recordingChunks = []
+  let recordingSampleRate = 48000
+  let recordingProcessor = null
+  let recordingSource = null
 
   refreshMicrophoneState()
   navigator.mediaDevices?.addEventListener?.('devicechange', () => {
@@ -58,9 +63,22 @@ export function useVoiceCommands(handlers) {
   })
 
   function start() {
-    if (!supported) return
+    if (!supported.value) return
     if (listening.value) {
       stop(true)
+      return
+    }
+    if (voiceProvider() === 'xfyun') {
+      void startXfyunRecording()
+      return
+    }
+    startWebSpeech()
+  }
+
+  function startWebSpeech() {
+    if (!browserSpeechSupported) {
+      transcript.value = '当前浏览器不支持 Web Speech API，请切换讯飞 API 服务。'
+      voiceStatus.diagnostic = transcript.value
       return
     }
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -129,6 +147,10 @@ export function useVoiceCommands(handlers) {
   }
 
   function stop(processLastText = true) {
+    if (voiceProvider() === 'xfyun' && listening.value) {
+      void stopXfyunRecording(processLastText)
+      return
+    }
     const textToProcess = lastFinalText || lastRecognizedText
     if (processLastText && textToProcess) {
       const matched = matchCommand(textToProcess)
@@ -146,6 +168,72 @@ export function useVoiceCommands(handlers) {
     listening.value = false
     transcript.value = textToProcess || '语音已停止'
     stopInputMonitor()
+  }
+
+  async function startXfyunRecording() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      voiceStatus.permission = '不可用'
+      voiceStatus.diagnostic = '当前环境不支持麦克风访问。'
+      return
+    }
+    if (voiceStatus.testingMicrophone) stopMicrophoneTest()
+    listening.value = true
+    lastFinalText = ''
+    lastRecognizedText = ''
+    recordingChunks = []
+    voiceStatus.matchedCommand = ''
+    voiceStatus.volume = 0
+    voiceStatus.volumeText = '等待输入'
+    transcript.value = '正在录音，请说出命令...'
+    voiceStatus.diagnostic = '讯飞 API 模式正在录音，点击停止后会上传到本地后端代理识别。'
+    try {
+      await startInputMonitor('record')
+    } catch (error) {
+      listening.value = false
+      stopInputMonitor()
+      applyMicrophoneError(error)
+    }
+  }
+
+  async function stopXfyunRecording(processLastText = true) {
+    const pcmBlob = buildPcmBlob()
+    listening.value = false
+    stopInputMonitor()
+    if (!processLastText) {
+      transcript.value = '语音已停止'
+      return
+    }
+    if (!pcmBlob.size) {
+      transcript.value = '没有采集到有效语音'
+      voiceStatus.diagnostic = '没有采集到有效语音，请重新录音。'
+      return
+    }
+    transcript.value = '正在识别语音...'
+    voiceStatus.diagnostic = '正在通过后端代理调用讯飞语音听写。'
+    try {
+      const data = await handlers.recognizeSpeech?.(pcmBlob)
+      const text = (data?.text || '').trim()
+      if (!text) {
+        transcript.value = '未识别到文字'
+        voiceStatus.lastText = ''
+        voiceStatus.diagnostic = '讯飞返回为空，请靠近麦克风或提高音量后重试。'
+        return
+      }
+      lastRecognizedText = text
+      voiceStatus.lastText = text
+      transcript.value = text
+      const matched = matchCommand(text)
+      if (matched) {
+        voiceStatus.matchedCommand = matched.name
+        voiceStatus.diagnostic = `已识别命令：${matched.name}`
+        await executeCommand(matched)
+      } else {
+        voiceStatus.diagnostic = '已识别文本，但没有命中命令。'
+      }
+    } catch (error) {
+      transcript.value = '讯飞语音识别失败'
+      voiceStatus.diagnostic = error?.message || '讯飞语音识别失败，请检查后端服务和凭证。'
+    }
   }
 
   async function testMicrophone() {
@@ -207,6 +295,17 @@ export function useVoiceCommands(handlers) {
     const analyser = audioContext.createAnalyser()
     analyser.fftSize = 2048
     source.connect(analyser)
+    recordingSource = source
+    if (mode === 'record') {
+      recordingSampleRate = audioContext.sampleRate || 48000
+      recordingProcessor = audioContext.createScriptProcessor(4096, 1, 1)
+      recordingProcessor.onaudioprocess = (event) => {
+        const input = event.inputBuffer.getChannelData(0)
+        recordingChunks.push(new Float32Array(input))
+      }
+      source.connect(recordingProcessor)
+      recordingProcessor.connect(audioContext.destination)
+    }
     const data = new Uint8Array(analyser.fftSize)
     audioTimer = setInterval(() => {
       analyser.getByteTimeDomainData(data)
@@ -216,6 +315,8 @@ export function useVoiceCommands(handlers) {
       voiceStatus.volumeText = volume < 8 ? '音量偏低' : volume < 25 ? '音量正常' : '音量清晰'
       if (mode === 'test') {
         voiceStatus.diagnostic = volume < 8 ? '麦克风已授权，但声音偏小或没有输入。' : '麦克风有输入，若仍无法识别，多半是语音识别服务或环境问题。'
+      } else if (mode === 'record') {
+        voiceStatus.diagnostic = volume < 8 ? '讯飞模式录音中，当前音量偏低。' : '讯飞模式录音中，点击停止后会自动识别。'
       } else if (volume < 8) {
         voiceStatus.diagnostic = '正在监听，但当前音量偏低；请靠近麦克风或提高音量。'
       } else {
@@ -228,6 +329,11 @@ export function useVoiceCommands(handlers) {
   function stopInputMonitor() {
     if (audioStopTimer) clearTimeout(audioStopTimer)
     if (audioTimer) clearInterval(audioTimer)
+    if (recordingProcessor) {
+      recordingProcessor.disconnect()
+      recordingProcessor.onaudioprocess = null
+    }
+    if (recordingSource) recordingSource.disconnect()
     if (audioStream) audioStream.getTracks().forEach((track) => track.stop())
     if (audioContext && audioContext.state !== 'closed') audioContext.close().catch?.(() => {})
     voiceStatus.inputMonitoring = false
@@ -235,6 +341,17 @@ export function useVoiceCommands(handlers) {
     audioTimer = null
     audioStream = null
     audioContext = null
+    recordingProcessor = null
+    recordingSource = null
+  }
+
+  function buildPcmBlob() {
+    const samples = mergeFloat32(recordingChunks)
+    recordingChunks = []
+    if (!samples.length) return new Blob([], { type: 'audio/pcm' })
+    const downsampled = downsample(samples, recordingSampleRate, 16000)
+    const pcm = floatTo16BitPcm(downsampled)
+    return new Blob([pcm], { type: 'audio/pcm' })
   }
 
   function matchCommand(text) {
@@ -340,6 +457,10 @@ export function useVoiceCommands(handlers) {
     return `语音识别错误：${error}`
   }
 
+  function voiceProvider() {
+    return options.voiceProvider?.value || options.voiceProvider || 'web_speech'
+  }
+
   return {
     listening,
     supported,
@@ -354,4 +475,44 @@ export function useVoiceCommands(handlers) {
     refreshMicrophoneState,
     selectInputDevice
   }
+}
+
+function mergeFloat32(chunks) {
+  const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
+  const result = new Float32Array(length)
+  let offset = 0
+  chunks.forEach((chunk) => {
+    result.set(chunk, offset)
+    offset += chunk.length
+  })
+  return result
+}
+
+function downsample(samples, inputRate, outputRate) {
+  if (inputRate === outputRate) return samples
+  const ratio = inputRate / outputRate
+  const length = Math.floor(samples.length / ratio)
+  const result = new Float32Array(length)
+  for (let index = 0; index < length; index += 1) {
+    const start = Math.floor(index * ratio)
+    const end = Math.floor((index + 1) * ratio)
+    let sum = 0
+    let count = 0
+    for (let source = start; source < end && source < samples.length; source += 1) {
+      sum += samples[source]
+      count += 1
+    }
+    result[index] = count ? sum / count : 0
+  }
+  return result
+}
+
+function floatTo16BitPcm(samples) {
+  const buffer = new ArrayBuffer(samples.length * 2)
+  const view = new DataView(buffer)
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = Math.max(-1, Math.min(1, samples[index]))
+    view.setInt16(index * 2, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true)
+  }
+  return buffer
 }

@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { FileText, SlidersHorizontal, UploadCloud, X } from 'lucide-vue-next'
+import { FileText, Mic, SlidersHorizontal, UploadCloud, X } from 'lucide-vue-next'
 import PromptTextarea from './PromptTextarea.vue'
 
 defineProps({
@@ -14,6 +14,7 @@ const activeSection = ref('processing')
 const sections = [
   { id: 'processing', label: '资料处理', icon: FileText },
   { id: 'upload', label: '上传限制', icon: UploadCloud },
+  { id: 'voice', label: '语音识别', icon: Mic },
   { id: 'prompts', label: '提示词模板', icon: SlidersHorizontal }
 ]
 </script>
@@ -63,6 +64,22 @@ const sections = [
               <span>单文件大小</span>
               <input v-model="settings.upload.maxSizeText" disabled />
             </label>
+          </article>
+
+          <article v-if="activeSection === 'voice'" class="settings-section">
+            <h3>语音识别</h3>
+            <label>
+              <span>识别方式</span>
+              <select v-model="settings.voice.provider">
+                <option value="web_speech">浏览器 Web Speech</option>
+                <option value="xfyun">讯飞 API 服务</option>
+              </select>
+            </label>
+            <ul>
+              <li>Web Speech 直接使用浏览器识别服务，配置简单，但受浏览器和网络环境影响。</li>
+              <li>讯飞 API 服务会先在前端录音并转为 16k PCM，再由后端代理调用讯飞语音听写。</li>
+              <li>讯飞凭证只从后端环境变量读取，避免密钥暴露到浏览器端。</li>
+            </ul>
           </article>
 
           <article v-if="activeSection === 'prompts'" class="settings-section prompt-section">
