@@ -319,7 +319,7 @@ const {
   },
   initialize: () => {
     if (!documents.value.length) return voiceGuard('请先上传课程资料，再初始化课程。', 'library')
-    void initializeCourse()
+    void initializeCourse({ skipConfirm: true, trigger: 'voice' })
     return { message: '正在初始化课程。' }
   },
   providerTest: () => {
@@ -620,15 +620,27 @@ async function pauseInitialization() {
   }
 }
 
-async function initializeCourse() {
+async function initializeCourse(options = {}) {
+  const { skipConfirm = false, trigger = 'manual' } = options
+  if (courseBootstrapping.value) {
+    status.message = '课程正在初始化，请等待完成或点击暂停初始化。'
+    activeView.value = 'study'
+    return
+  }
   if (!uniqueDocuments.value.length) {
     status.warning = '请先上传课程资料，再初始化课程。'
     activeView.value = 'library'
     return
   }
-  if (chapters.value.length) {
+  if (chapters.value.length && !skipConfirm) {
     const confirmed = window.confirm('重新初始化会基于当前资料重建大纲、章节内容和测验，并清空已有测验记录。确认继续？')
     if (!confirmed) return
+  }
+  if (chapters.value.length && skipConfirm) {
+    status.warning = ''
+    status.message = trigger === 'voice'
+      ? '已通过语音确认重新初始化，正在重建大纲、章节内容和测验。'
+      : '正在重新初始化课程。'
   }
   const initializationId = createInitializationId()
   activeInitializationId = initializationId
