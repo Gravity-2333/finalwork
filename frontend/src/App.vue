@@ -848,6 +848,8 @@ async function loadCloudModels() {
       config.model = data.models[0].id
       status.message = `已获取 ${data.models.length} 个可用云端 Ollama 模型。`
     } else if (data) {
+      cloudModels.value = []
+      config.model = ''
       status.warning = '云端 Ollama 暂无已测试可用的项目模型，请检查账号权限或更换 API Key。'
     }
   } finally {
@@ -923,6 +925,7 @@ function applyProviderDefaults() {
   if (!config.base_url || knownBaseUrls.includes(config.base_url)) config.base_url = defaults.base_url
   if (!config.api_key_env || knownKeyEnvs.includes(config.api_key_env)) config.api_key_env = defaults.api_key_env
   if (config.provider === 'mock' || config.provider === 'local_ollama') config.api_key = ''
+  if (config.provider === 'cloud_ollama' && !cloudModels.value.length) config.model = ''
 }
 </script>
 

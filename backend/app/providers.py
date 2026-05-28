@@ -255,11 +255,19 @@ def _normalize_openai_base_url(base_url: str) -> str:
 
 
 def _rank_project_models(names: list[str]) -> list[str]:
+    bad_tokens = ("embed", "embedding", "image", "vision", "audio", "whisper", "tts", "speech", "rerank")
+
+    def suitable(name: str) -> bool:
+        lowered = name.lower()
+        if any(token in lowered for token in bad_tokens):
+            return False
+        return any(token in lowered for token in PROJECT_MODEL_HINTS)
+
     def score(name: str) -> tuple[int, str]:
         lowered = name.lower()
-        bad = any(token in lowered for token in ("embed", "image", "vision", "audio", "whisper", "tts"))
         hint = any(token in lowered for token in PROJECT_MODEL_HINTS)
         coder_penalty = 1 if "coder" in lowered else 0
-        return (10 if bad else 0, 0 if hint else 1, coder_penalty, name)
+        size_penalty = 1 if any(token in lowered for token in ("70b", "72b", "671b", "405b")) else 0
+        return (0 if hint else 1, size_penalty, coder_penalty, name)
 
-    return sorted(names, key=score)
+    return sorted([name for name in names if suitable(name)], key=score)

@@ -18,7 +18,7 @@ const props = defineProps({
 defineEmits(['test', 'load-cloud-models'])
 
 const showApiKey = computed(() => ['cloud_ollama', 'openai_compatible'].includes(props.config.provider))
-const showCloudModels = computed(() => props.config.provider === 'cloud_ollama' && props.cloudModels.length)
+const isCloudOllama = computed(() => props.config.provider === 'cloud_ollama')
 const providerOptions = [
   { id: 'mock', title: 'Mock 演示', desc: '无密钥离线演示，适合课堂截图。' },
   { id: 'local_ollama', title: '本地 Ollama', desc: '连接本机 Ollama 服务。' },
@@ -49,9 +49,11 @@ const providerOptions = [
         </button>
       </div>
 
-      <label v-if="config.provider !== 'mock'">
+      <label v-if="config.provider !== 'mock'" class="model-field">
         <span>模型</span>
-        <select v-if="showCloudModels" v-model="config.model">
+        <select v-if="isCloudOllama" v-model="config.model" :disabled="cloudLoading || !cloudModels.length">
+          <option v-if="cloudLoading" value="">正在测试可用模型...</option>
+          <option v-else-if="!cloudModels.length" value="">请先点击“模型列表”获取可用模型</option>
           <option v-for="model in cloudModels" :key="model.id" :value="model.id">{{ model.name }}</option>
         </select>
         <input v-else v-model="config.model" :placeholder="modelPlaceholder" />
@@ -96,7 +98,7 @@ const providerOptions = [
         <RefreshCw :size="16" /> 模型列表
       </button>
 
-      <button class="primary provider-test" :disabled="status.loading" @click="$emit('test')">
+      <button class="primary provider-test" :disabled="status.loading || (isCloudOllama && !cloudModels.length)" @click="$emit('test')">
         <Wifi :size="16" /> 测试
       </button>
     </div>
