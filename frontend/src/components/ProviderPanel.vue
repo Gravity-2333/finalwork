@@ -57,7 +57,7 @@ const providerOptions = [
         <input v-else v-model="config.model" :placeholder="modelPlaceholder" />
       </label>
 
-      <label v-if="config.provider !== 'mock'">
+      <label v-if="config.provider !== 'mock'" class="url-field">
         <span>地址</span>
         <input v-model="config.base_url" :placeholder="baseUrlPlaceholder" />
       </label>

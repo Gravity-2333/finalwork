@@ -378,9 +378,13 @@ button.danger-soft:hover:not(:disabled) {
 
 .provider-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: minmax(190px, 1.05fr) minmax(360px, 2.2fr) minmax(150px, 0.8fr) minmax(190px, 1fr);
   gap: 12px;
   align-items: end;
+}
+
+.provider-fields .url-field {
+  min-width: 320px;
 }
 
 .provider-panel label {
@@ -398,6 +402,10 @@ button.danger-soft:hover:not(:disabled) {
   border-radius: 8px;
   padding: 0 10px;
   background: #f9fbfe;
+}
+
+.provider-panel input {
+  min-width: 0;
 }
 
 .provider-panel .toggle {
@@ -1165,7 +1173,7 @@ pre {
 
 .voice-diagnostics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(360px, 1.35fr) repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -1193,16 +1201,32 @@ pre {
   color: #52637a;
   font-size: 14px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .voice-diagnostics select {
+  appearance: none;
+  -webkit-appearance: none;
   width: 100%;
   min-height: 36px;
   border: 1px solid #cfdbea;
   border-radius: 8px;
-  padding: 0 10px;
+  padding: 0 42px 0 12px;
   color: #173b72;
-  background: #f9fbfe;
+  background:
+    linear-gradient(45deg, transparent 50%, #173b72 50%) calc(100% - 18px) 50% / 6px 6px no-repeat,
+    linear-gradient(135deg, #173b72 50%, transparent 50%) calc(100% - 14px) 50% / 6px 6px no-repeat,
+    #f9fbfe;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.voice-diagnostics select:focus {
+  border-color: #6aa3ff;
+  box-shadow: 0 0 0 3px rgba(31, 111, 229, 0.14);
+  outline: none;
 }
 
 .voice-diagnostics small {
