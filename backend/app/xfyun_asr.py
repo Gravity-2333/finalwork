@@ -22,10 +22,14 @@ IAT_PATH = "/v2/iat"
 IAT_URL = f"wss://{IAT_HOST}{IAT_PATH}"
 
 
+# 检查讯飞语音听写凭证是否齐全。
+# 功能：供健康检查和前端状态提示使用，不暴露具体密钥内容。
 def xfyun_ready() -> bool:
     return all(os.getenv(name) for name in ("XFYUN_APPID", "XFYUN_API_KEY", "XFYUN_API_SECRET"))
 
 
+# 调用讯飞语音听写 WebAPI 识别 PCM 音频。
+# 功能：接收前端 16k PCM 数据，生成鉴权 WebSocket URL，分片发送音频并拼接返回文字。
 async def recognize_pcm_with_xfyun(audio: bytes) -> dict:
     if not audio:
         raise AsrError("没有收到语音数据，请重新录音。")
@@ -68,6 +72,8 @@ async def recognize_pcm_with_xfyun(audio: bytes) -> dict:
     return {"text": text, "provider": "xfyun"}
 
 
+# 生成讯飞 WebSocket 鉴权 URL。
+# 功能：按讯飞规范用 APISecret 对 host/date/request-line 做 HMAC-SHA256 签名。
 def _signed_url(api_key: str, api_secret: str) -> str:
     date = format_datetime(datetime.now(timezone.utc), usegmt=True)
     signature_origin = f"host: {IAT_HOST}\ndate: {date}\nGET {IAT_PATH} HTTP/1.1"
@@ -87,6 +93,8 @@ def _signed_url(api_key: str, api_secret: str) -> str:
     return f"{IAT_URL}?{query}"
 
 
+# 构造讯飞音频帧。
+# 功能：首帧携带 common/business 参数，中间帧和尾帧只发送音频状态与 PCM 数据。
 def _frame(app_id: str, chunk: bytes, status: int) -> dict:
     frame = {
         "data": {

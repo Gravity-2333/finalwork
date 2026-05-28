@@ -62,6 +62,8 @@ export function useVoiceCommands(handlers, options = {}) {
     void refreshMicrophoneState()
   })
 
+  // 启动或停止语音识别。
+  // 功能：根据系统设置选择 Web Speech 或讯飞 API 模式；正在监听时再次点击会停止并处理最后语音。
   function start() {
     if (!supported.value) return
     if (listening.value) {
@@ -75,6 +77,8 @@ export function useVoiceCommands(handlers, options = {}) {
     startWebSpeech()
   }
 
+  // 启动浏览器 Web Speech 识别。
+  // 功能：使用浏览器内置语音识别服务实时返回文本，命中固定命令后自动停止并执行。
   function startWebSpeech() {
     if (!browserSpeechSupported) {
       transcript.value = '当前浏览器不支持 Web Speech API，请切换讯飞 API 服务。'
@@ -146,6 +150,8 @@ export function useVoiceCommands(handlers, options = {}) {
     }
   }
 
+  // 停止当前语音识别。
+  // 功能：Web Speech 模式处理最后一句文本；讯飞模式停止录音、上传 PCM 并等待识别结果。
   function stop(processLastText = true) {
     if (voiceProvider() === 'xfyun' && listening.value) {
       void stopXfyunRecording(processLastText)
@@ -170,6 +176,8 @@ export function useVoiceCommands(handlers, options = {}) {
     stopInputMonitor()
   }
 
+  // 启动讯飞 API 模式录音。
+  // 功能：采集所选麦克风音频，实时显示音量，并缓存 Float32 音频样本等待停止后转码。
   async function startXfyunRecording() {
     if (!navigator.mediaDevices?.getUserMedia) {
       voiceStatus.permission = '不可用'
@@ -195,6 +203,8 @@ export function useVoiceCommands(handlers, options = {}) {
     }
   }
 
+  // 停止讯飞录音并识别。
+  // 功能：把缓存音频转为 16k PCM，提交后端讯飞代理，拿到文本后复用固定命令匹配逻辑。
   async function stopXfyunRecording(processLastText = true) {
     const pcmBlob = buildPcmBlob()
     listening.value = false
@@ -236,6 +246,8 @@ export function useVoiceCommands(handlers, options = {}) {
     }
   }
 
+  // 麦克风测试。
+  // 功能：只检测权限、输入设备和实时音量，不执行命令，用于排查“听不到”和“识别失败”的区别。
   async function testMicrophone() {
     if (voiceStatus.testingMicrophone) {
       voiceStatus.diagnostic = '麦克风测试正在进行。'
@@ -269,6 +281,8 @@ export function useVoiceCommands(handlers, options = {}) {
     voiceStatus.testingMicrophone = false
   }
 
+  // 打开麦克风输入监测。
+  // 功能：创建 getUserMedia 音频流，用 AnalyserNode 计算音量；录音模式下额外缓存音频样本。
   async function startInputMonitor(mode = 'listen', autoStopMs = 0) {
     stopInputMonitor()
     const audioConstraints = {
@@ -345,6 +359,8 @@ export function useVoiceCommands(handlers, options = {}) {
     recordingSource = null
   }
 
+  // 构建讯飞可接收的 PCM 音频。
+  // 功能：合并录音样本、重采样到 16kHz，并转成 little-endian PCM 16bit。
   function buildPcmBlob() {
     const samples = mergeFloat32(recordingChunks)
     recordingChunks = []
@@ -354,6 +370,8 @@ export function useVoiceCommands(handlers, options = {}) {
     return new Blob([pcm], { type: 'audio/pcm' })
   }
 
+  // 匹配语音命令。
+  // 功能：对识别文本做关键词包含匹配，命中后返回对应的页面跳转或自动执行命令。
   function matchCommand(text) {
     const normalized = text.toLowerCase()
     return COMMANDS.find((command) => command.keywords.some((keyword) => normalized.includes(keyword.toLowerCase())))
@@ -391,6 +409,8 @@ export function useVoiceCommands(handlers, options = {}) {
     }
   }
 
+  // 切换麦克风输入设备。
+  // 功能：更新测试和音量监测使用的设备；Web Speech 实际输入设备仍由浏览器服务接管。
   async function selectInputDevice(deviceId) {
     selectedInputDeviceId.value = deviceId
     const selected = audioInputs.value.find((device) => device.deviceId === deviceId)
@@ -477,6 +497,8 @@ export function useVoiceCommands(handlers, options = {}) {
   }
 }
 
+// 合并录音分片。
+// 功能：把 ScriptProcessor 多次回调得到的 Float32Array 拼成连续音频样本。
 function mergeFloat32(chunks) {
   const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0)
   const result = new Float32Array(length)
@@ -488,6 +510,8 @@ function mergeFloat32(chunks) {
   return result
 }
 
+// 音频重采样。
+// 功能：将浏览器采集的原始采样率压到讯飞听写要求的 16kHz。
 function downsample(samples, inputRate, outputRate) {
   if (inputRate === outputRate) return samples
   const ratio = inputRate / outputRate
@@ -507,6 +531,8 @@ function downsample(samples, inputRate, outputRate) {
   return result
 }
 
+// Float32 转 PCM 16bit。
+// 功能：把 -1 到 1 的浮点音频样本转换为讯飞 WebAPI 使用的 PCM 二进制格式。
 function floatTo16BitPcm(samples) {
   const buffer = new ArrayBuffer(samples.length * 2)
   const view = new DataView(buffer)

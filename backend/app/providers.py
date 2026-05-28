@@ -24,6 +24,8 @@ class ProviderError(RuntimeError):
 PROJECT_MODEL_HINTS = ("qwen", "deepseek", "kimi", "glm", "llama", "gpt", "mistral", "minimax", "gemini")
 
 
+# 离线 Mock 生成器。
+# 功能：在没有真实模型或 API Key 时返回可演示的大纲、章节内容和测验，保障课堂演示可运行。
 def mock_generate(prompt: str) -> str:
     if "学习大纲" in prompt and "章节标题 - 学习目标" in prompt:
         return (
@@ -96,6 +98,8 @@ def _mock_quiz_json() -> str:
     return json.dumps(objects, ensure_ascii=False)
 
 
+# 统一模型 Provider 调用入口。
+# 功能：按当前配置路由到 Mock、本地 Ollama、云端 Ollama 或 OpenAI-compatible 接口；失败时可回退 Mock。
 def call_provider(
     provider: str,
     prompt: str,
@@ -141,6 +145,8 @@ def call_provider(
         )
 
 
+# 测试当前模型连接。
+# 功能：发送极短测试 Prompt，验证模型来源、模型名、base_url 和 API Key 是否可用。
 def test_provider(
     provider: str,
     model: str = "",
@@ -160,6 +166,8 @@ def test_provider(
     return {"ok": True, "provider": result.provider, "message": result.text[:120]}
 
 
+# 获取并筛选云端 Ollama 可用模型。
+# 功能：拉取模型列表，过滤不适合文本学习助手的模型，并逐个探测保留当前项目可调用的模型。
 def cloud_ollama_models(
     base_url: str = "",
     api_key: str = "",
@@ -187,6 +195,8 @@ def cloud_ollama_models(
     return usable
 
 
+# 调用本地 Ollama /api/chat。
+# 功能：用于无云端密钥的本机模型推理，默认连接 localhost:11434。
 def _call_local_ollama(prompt: str, model: str, base_url: str) -> str:
     url = f"{base_url.rstrip('/')}/api/chat"
     response = requests.post(
@@ -206,6 +216,8 @@ def _call_local_ollama(prompt: str, model: str, base_url: str) -> str:
     return data.get("message", {}).get("content", "").strip() or "本地 Ollama 返回为空。"
 
 
+# 调用 OpenAI-compatible Chat Completions 接口。
+# 功能：统一适配 DeepSeek、云端 Ollama 等兼容 /chat/completions 的服务。
 def _call_openai_compatible(
     prompt: str,
     model: str,
@@ -234,6 +246,8 @@ def _call_openai_compatible(
     return data["choices"][0]["message"]["content"].strip()
 
 
+# 解析 API Key 来源。
+# 功能：优先使用用户手动输入的 Key；为空时按环境变量名读取，缺失则给出明确错误。
 def _resolve_api_key(api_key: str = "", api_key_env: str = "") -> str:
     if api_key.strip():
         return api_key.strip()

@@ -111,6 +111,8 @@ async def upload_document(file: UploadFile = File(...)) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+# 批量上传学习资料。
+# 功能：一次接收最多 20 个文件，逐个写入本地知识库，返回成功资料和失败原因。
 @app.post("/api/documents/upload-batch")
 async def upload_documents(files: list[UploadFile] = File(...)) -> dict:
     if len(files) > MAX_BATCH_FILES:
@@ -144,6 +146,8 @@ def remove_documents() -> dict:
     return {"ok": True, "count": count, "message": "资料库已清空，学习大纲与测验记录已同步清理。"}
 
 
+# 读取并校验上传文件。
+# 功能：限制单文件大小，拦截空文件，避免异常资料进入知识库构建流程。
 async def _read_upload(file: UploadFile) -> bytes:
     content = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(content) > MAX_UPLOAD_BYTES:
@@ -154,6 +158,8 @@ async def _read_upload(file: UploadFile) -> bytes:
     return content
 
 
+# 生成课程大纲接口。
+# 功能：配置 LangSmith 后调用工作流生成学习路径，供前端学习路径页面展示。
 @app.post("/api/outline")
 def outline(config: ProviderConfig) -> dict:
     _configure_langsmith(config)
@@ -176,6 +182,8 @@ def chapters() -> dict:
     return {"chapters": list_chapters()}
 
 
+# 生成章节内容接口。
+# 功能：为指定章节生成 Markdown 学习讲义，并写回本地数据库。
 @app.post("/api/chapters/{chapter_id}/content")
 def chapter_content(chapter_id: int, config: ProviderConfig) -> dict:
     _configure_langsmith(config)
@@ -194,6 +202,8 @@ def chapter_content(chapter_id: int, config: ProviderConfig) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+# 生成章节测验接口。
+# 功能：为指定章节生成单选题，供前端测验复盘模块使用。
 @app.post("/api/chapters/{chapter_id}/quiz")
 def chapter_quiz(chapter_id: int, config: ProviderConfig) -> dict:
     _configure_langsmith(config)
@@ -234,6 +244,8 @@ def provider_cloud_ollama_models(config: ProviderConfig) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+# 讯飞语音识别代理接口。
+# 功能：接收前端 16k PCM 音频，后端持有凭证调用讯飞 WebAPI，避免密钥暴露到浏览器。
 @app.post("/api/asr/recognize")
 async def asr_recognize(file: UploadFile = File(...)) -> dict:
     try:
@@ -294,6 +306,8 @@ def face_enroll(payload: FacePayload) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+# 人脸识别登录接口。
+# 功能：校验当前采集的人脸特征是否匹配账号已录入模板，通过后返回登录状态和替换令牌。
 @app.post("/api/face-login")
 def face_login(payload: FacePayload) -> dict:
     try:

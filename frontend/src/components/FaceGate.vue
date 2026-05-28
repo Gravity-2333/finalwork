@@ -58,6 +58,8 @@ watch(username, (value) => {
   }, 260)
 })
 
+// 开启摄像头并启动人脸检测。
+// 功能：加载 face-api 模型，申请摄像头权限，并进入周期性人脸检测状态。
 async function startCamera() {
   if (cameraStarting.value || captureBusy.value) return
   if (!navigator.mediaDevices?.getUserMedia) {
@@ -80,6 +82,8 @@ async function startCamera() {
   }
 }
 
+// 加载浏览器端人脸识别模型。
+// 功能：按需动态加载 tiny detector、landmark 和 recognition 模型，避免重复加载。
 async function loadModels() {
   if (modelsLoaded.value) return
   if (loadingModels && modelPromise) return modelPromise
@@ -99,6 +103,8 @@ async function loadModels() {
   }
 }
 
+// 录入当前账号人脸模板。
+// 功能：连续采集稳定人脸特征后提交给后端保存；未登录时禁止覆盖已有模板。
 async function enroll() {
   if (interactionLocked.value) return
   if (props.enrolled && !props.allowReenroll && !props.needsUpgrade) {
@@ -112,6 +118,8 @@ async function enroll() {
   emit('enroll', { username: normalizeUsername(username.value), descriptor: currentDescriptor })
 }
 
+// 执行人脸识别登录。
+// 功能：连续采集当前人脸特征并提交后端，与账号绑定模板进行安全比对。
 async function verify() {
   if (interactionLocked.value) return
   const currentDescriptor = await captureStableDescriptor()
@@ -121,6 +129,8 @@ async function verify() {
   emit('verify', { username: normalizeUsername(username.value), descriptor: currentDescriptor })
 }
 
+// 周期性检测摄像头画面。
+// 功能：持续判断画面中是否只有一张人脸，并实时更新可录入/可登录状态。
 function startDetection() {
   if (detectTimer) clearInterval(detectTimer)
   detectTimer = setInterval(async () => {
@@ -143,6 +153,8 @@ function startDetection() {
   }, 900)
 }
 
+// 采集单帧人脸特征。
+// 功能：从当前视频帧中提取 face-api descriptor，并拼接灰度模板辅助特征。
 async function captureCurrentDescriptor(runId) {
   if (!video.value || video.value.readyState < 2 || !faceapi) return null
   try {
@@ -166,6 +178,8 @@ async function captureCurrentDescriptor(runId) {
   }
 }
 
+// 连续采集稳定人脸特征。
+// 功能：采集多帧并求平均，若帧间漂移过大则拒绝提交，减少误识别和抖动影响。
 async function captureStableDescriptor() {
   const runId = ++captureRunId
   const startedAt = Date.now()
@@ -198,6 +212,8 @@ async function captureStableDescriptor() {
   }
 }
 
+// 平均多帧人脸特征。
+// 功能：对深度人脸向量取均值，对灰度哈希部分重新二值化，得到稳定模板。
 function averageDescriptors(samples) {
   return samples[0].map((_, index) => {
     const value = samples.reduce((sum, item) => sum + item[index], 0) / samples.length
@@ -210,11 +226,15 @@ function descriptorDistance(left, right) {
   return Math.sqrt(left.slice(0, 128).reduce((sum, item, index) => sum + (item - right[index]) ** 2, 0))
 }
 
+// 生成组合人脸特征。
+// 功能：将 face-api 128 维深度特征和 16x16 灰度哈希拼接，供后端双重比对。
 function createCompositeDescriptor(face) {
   const modelDescriptor = Array.from(face.descriptor).map((item) => Number(item.toFixed(6)))
   return [...modelDescriptor, ...createFaceHash(face.detection.box)]
 }
 
+// 生成当前人脸区域灰度哈希。
+// 功能：裁剪脸部区域压缩到 16x16，并按平均亮度二值化，作为辅助模板。
 function createFaceHash(box) {
   const canvas = document.createElement('canvas')
   const size = 16
@@ -241,6 +261,8 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+// 给单帧检测增加超时保护。
+// 功能：避免摄像头或模型卡住导致按钮长期不可用。
 function withTimeout(promise, timeoutMs) {
   let timer = null
   const timeout = new Promise((resolve) => {

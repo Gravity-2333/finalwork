@@ -433,6 +433,8 @@ watch(selectedChapterId, async (chapterId) => {
   quizzes.value = data.quizzes || []
 })
 
+// 统一包装前端异步任务。
+// 功能：设置全局 loading、状态文案和错误提示，避免各业务函数重复处理加载态。
 async function runTask(message, task) {
   status.loading = true
   status.message = message
@@ -470,6 +472,8 @@ async function refreshChapters() {
   selectedChapterId.value = chapters.value[0]?.id || null
 }
 
+// 查询当前账号的人脸模板状态。
+// 功能：在账号输入变化时刷新是否已录入、是否需要升级模板，并用 lookupId 避免旧请求覆盖新账号状态。
 async function refreshFaceProfile(username = faceProfileState.username) {
   const normalized = (username || '杨翰飞').trim() || '杨翰飞'
   const lookupId = (faceProfileLookupId += 1)
@@ -488,6 +492,8 @@ function handleFaceUsernameChange(username) {
   refreshFaceProfile(normalized)
 }
 
+// 提交人脸录入结果。
+// 功能：把前端采集到的 descriptor 发送到后端保存，支持已登录后的重新录入。
 async function enrollFace(payload) {
   const data = await runTask('正在录入授权人脸模板...', () =>
     faceEnroll({ ...payload, allow_replace: face.ok, replace_token: face.ok ? faceReplaceToken.value : '' })
@@ -501,6 +507,8 @@ async function enrollFace(payload) {
   }
 }
 
+// 提交人脸登录核验。
+// 功能：把当前摄像头采集的人脸特征发给后端比对，通过后进入学习工作台。
 async function verifyFace(payload) {
   const data = await runTask('正在进行人脸特征比对...', () => faceLogin(payload))
   if (data?.ok) {
@@ -527,6 +535,8 @@ function logout() {
   status.message = '已退出登录，请重新进行人脸识别。'
 }
 
+// 处理资料批量上传。
+// 功能：校验单批 20 个、单文件 25MB 限制，上传后刷新本地知识库资料列表。
 async function handleUpload(event) {
   const files = Array.from(event.target.files || [])
   event.target.value = ''
@@ -555,6 +565,8 @@ async function handleUpload(event) {
   }
 }
 
+// 执行本地知识库检索。
+// 功能：根据用户输入关键词查询后端 SQLite 切片，展示命中的来源文件和内容片段。
 async function runKnowledgeSearch() {
   const query = knowledgeQuery.value.trim()
   if (!uniqueDocuments.value.length) {
@@ -598,6 +610,8 @@ function updateChapterQuizCount(chapterId, count) {
   if (index >= 0) chapters.value[index] = { ...chapters.value[index], quiz_count: count }
 }
 
+// 后台生成章节测验。
+// 功能：章节内容生成后自动补齐测验；若测验已存在则直接复用，避免重复调用模型。
 async function generateQuizInBackground(chapter) {
   if (!chapter?.id || quizGeneratingIds.value.includes(chapter.id)) return
   setQuizGenerating(chapter.id, true)
@@ -620,6 +634,8 @@ async function generateQuizInBackground(chapter) {
   }
 }
 
+// 暂停课程初始化。
+// 功能：中断前端请求、通知后端取消本次初始化，并清理本轮已生成的大纲、内容、测验和错题。
 async function pauseInitialization() {
   if (!courseBootstrapping.value || !activeInitializationId) return
   const pausedId = activeInitializationId
@@ -646,6 +662,8 @@ async function pauseInitialization() {
   }
 }
 
+// 初始化完整课程学习路径。
+// 功能：以用户点击或语音命令为起点，依次生成课程大纲、每章学习内容和每章测验。
 async function initializeCourse(options = {}) {
   const { skipConfirm = false, trigger = 'manual' } = options
   if (courseBootstrapping.value) {
@@ -796,6 +814,8 @@ function handleNextSecondary() {
   activeView.value = 'study'
 }
 
+// 单独生成课程大纲。
+// 功能：调用后端 LangGraph 大纲流程，生成或刷新学习路径。
 async function generateOutline() {
   const data = await runTask('正在通过 LangGraph 生成课程大纲...', () => createOutline(providerPayload()))
   if (data) {
@@ -806,6 +826,8 @@ async function generateOutline() {
   }
 }
 
+// 生成指定章节学习内容。
+// 功能：调用后端章节内容流程，生成 Markdown 讲义并触发后台测验生成。
 async function generateContent(chapter) {
   const data = await runTask(`正在生成《${chapter.title}》学习内容...`, () =>
     createChapterContent(chapter.id, providerPayload())
@@ -819,6 +841,8 @@ async function generateContent(chapter) {
   }
 }
 
+// 打开当前章节测验。
+// 功能：优先读取已生成测验；如果仍在后台生成则提示等待，避免空题进入考试。
 async function startQuizForSelected() {
   if (!selectedChapter.value) return
   if (quizGeneratingIds.value.includes(selectedChapter.value.id)) {
@@ -838,6 +862,8 @@ async function startQuizForSelected() {
   activeView.value = 'quiz'
 }
 
+// 提交当前章节测验。
+// 功能：提交用户答案，展示正确率和逐题解析，并同步刷新错题归档。
 async function submitCurrentQuiz() {
   if (!selectedChapter.value) return
   const data = await runTask('正在提交测验并归档错题...', () => submitQuiz(selectedChapter.value.id, answers))
@@ -900,6 +926,8 @@ async function loadWrongs() {
   wrongs.value = data.wrong_answers
 }
 
+// 测试当前 AI Provider 连接。
+// 功能：验证模型来源、模型名、base_url 和 Key 配置是否能正常调用。
 async function runProviderTest() {
   const data = await runTask('正在测试模型连接...', () => testProvider(providerPayload()))
   if (data?.ok) {
@@ -908,6 +936,8 @@ async function runProviderTest() {
   }
 }
 
+// 获取云端 Ollama 可用模型列表。
+// 功能：请求后端拉取并测试模型，最终只展示当前项目可实际调用的文本模型。
 async function loadCloudModels() {
   if (!navigator.onLine) {
     status.warning = '当前浏览器显示网络离线，无法获取云端 Ollama 模型列表。'
@@ -934,6 +964,8 @@ async function loadCloudModels() {
   }
 }
 
+// 组装 AI 调用配置。
+// 功能：把当前 Provider、Key 模式、LangSmith 开关和用户自定义 Prompt 模板传给后端。
 function providerPayload(initializationId = '') {
   ensurePromptCompatibility()
   saveProviderConfig(config.provider)
@@ -962,6 +994,8 @@ function ensurePromptCompatibility() {
   }
 }
 
+// 读取系统设置。
+// 功能：从 localStorage 恢复提示词和语音识别方式；版本变化时迁移到新的默认配置。
 function loadSettings() {
   const raw = localStorage.getItem('ai-study-settings')
   if (!raw) return
@@ -999,6 +1033,8 @@ function applyProviderDefaults() {
   loadProviderConfig(config.provider)
 }
 
+// 保存当前模型来源的独立配置。
+// 功能：防止云端 Ollama、兼容接口、本地 Ollama 之间互相覆盖模型名和 Key 配置。
 function saveProviderConfig(provider = config.provider) {
   if (!provider || !providerConfigs[provider]) return
   Object.assign(providerConfigs[provider], {
@@ -1011,6 +1047,8 @@ function saveProviderConfig(provider = config.provider) {
   })
 }
 
+// 恢复指定模型来源配置。
+// 功能：切换 Provider 时加载该来源上次使用的模型、地址、Key 模式和追踪开关。
 function loadProviderConfig(provider = config.provider) {
   const defaults = providerDefaults[provider]
   const saved = providerConfigs[provider]

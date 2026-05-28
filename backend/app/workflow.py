@@ -113,6 +113,8 @@ FALLBACK_QUIZ_COUNT = 6
 _CANCELLED_INITIALIZATIONS: set[str] = set()
 
 
+# 暂停课程初始化流程。
+# 功能：记录本次初始化 ID 为已取消，并清空本轮已经生成的大纲、章节内容、测验和错题。
 def cancel_initialization(initialization_id: str) -> None:
     if initialization_id:
         _CANCELLED_INITIALIZATIONS.add(initialization_id)
@@ -131,6 +133,8 @@ def _raise_if_cancelled(initialization_id: str = "") -> None:
         raise ValueError("课程初始化已暂停，已清空本次生成的大纲、章节内容和测验。")
 
 
+# 生成课程学习大纲。
+# 功能：优先使用文档自身目录；目录不足时通过 LangGraph 检索资料、组装 Prompt、调用模型生成大纲。
 def run_outline(
     provider: str,
     model: str = "",
@@ -179,6 +183,8 @@ def _replace_outline(chapters: list[dict]) -> None:
         )
 
 
+# 生成单章学习内容。
+# 功能：根据章节标题和目标检索知识库片段，经 LangGraph 调用模型生成 Markdown 学习讲义。
 def generate_chapter(
     chapter_id: int,
     provider: str,
@@ -210,6 +216,8 @@ def generate_chapter(
     return {"chapter": get_chapter(chapter_id), "warning": state.get("warning", "")}
 
 
+# 生成单章测验题。
+# 功能：基于章节内容和知识库上下文调用模型生成 10 道单选题，并规范化后写入数据库。
 def generate_quiz(
     chapter_id: int,
     provider: str,
@@ -263,6 +271,8 @@ def generate_quiz(
     return {"quizzes": list_quizzes(chapter_id), "warning": result.warning}
 
 
+# 提交并批改章节测验。
+# 功能：计算正确率、生成逐题解析结果，自动把错题写入错题归档并更新章节学习进度。
 def submit_quiz(chapter_id: int, answers: dict[str, str]) -> dict:
     quizzes = list_quizzes(chapter_id)
     if not quizzes:
@@ -372,6 +382,8 @@ def _require_documents() -> None:
         raise ValueError("请先上传课程资料，系统需要基于知识库生成大纲和测验。")
 
 
+# 构建 LangGraph 工作流。
+# 功能：把“检索上下文 -> 组装提示词 -> 调用模型”拆成三个节点，供大纲和章节生成复用。
 def _graph():
     graph = StateGraph(AssistantState)
     graph.add_node("retrieve", _retrieve)
@@ -384,6 +396,8 @@ def _graph():
     return graph.compile()
 
 
+# LangGraph 检索节点。
+# 功能：根据任务类型选择大纲上下文、章节上下文或通用上下文。
 def _retrieve(state: AssistantState) -> AssistantState:
     if state["task"] == "chapter":
         chapter = get_chapter(int(state["chapter_id"]))
@@ -395,6 +409,8 @@ def _retrieve(state: AssistantState) -> AssistantState:
     return state
 
 
+# LangGraph Prompt 组装节点。
+# 功能：把上下文、章节标题、章节目标等变量填入默认或用户自定义提示词模板。
 def _compose(state: AssistantState) -> AssistantState:
     if state["task"] == "outline":
         state["prompt"] = _render_prompt(
@@ -416,6 +432,8 @@ def _compose(state: AssistantState) -> AssistantState:
     return state
 
 
+# LangGraph 模型调用节点。
+# 功能：检查初始化是否已取消，调用当前 Provider，并清理模型返回中的前置废话或代码围栏。
 def _generate(state: AssistantState) -> AssistantState:
     _raise_if_cancelled(state.get("initialization_id", ""))
     result = call_provider(
@@ -497,6 +515,8 @@ def estimate_outline_size(total_chunks: int, total_chars: int) -> int:
     return min(max(chapter_count, MIN_CHAPTERS), MAX_CHAPTERS)
 
 
+# 解析模型返回的大纲文本。
+# 功能：把“章节标题 - 学习目标”格式解析成结构化章节列表，不足时用兜底大纲补齐。
 def _parse_outline(text: str, expected_count: int = 6) -> list[dict]:
     chapters = []
     for line in text.splitlines():
@@ -544,6 +564,8 @@ def _parse_quiz(text: str, chapter: dict) -> list[dict]:
     return fallback_quiz(chapter)
 
 
+# 规范化模型返回的测验 JSON。
+# 功能：校验题目、选项、答案和解析，保证前端能稳定渲染和批改。
 def normalize_quiz_items(items: list, chapter: dict) -> list[dict]:
     questions = []
     for index, item in enumerate(items[:DEFAULT_QUIZ_COUNT]):

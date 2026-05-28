@@ -16,6 +16,8 @@ from .database import UPLOAD_DIR, connect
 ALLOWED_SUFFIXES = {".txt", ".md", ".docx", ".pdf"}
 
 
+# 保存用户上传资料到本地 uploads 目录。
+# 功能：校验允许的文件类型、清理文件名，并在重名但内容不同的情况下自动生成新文件名。
 def save_upload(file_name: str, content: bytes) -> Path:
     suffix = Path(file_name).suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
@@ -30,6 +32,8 @@ def save_upload(file_name: str, content: bytes) -> Path:
     return target
 
 
+# 构建本地专属知识库。
+# 功能：读取 txt/md/docx/pdf 内容，使用 LangChain 文档切割器切片，并把资料和切片写入 SQLite。
 def build_knowledge(file_path: Path) -> dict:
     existing = _existing_document(file_path.name)
     if existing:
@@ -120,6 +124,8 @@ def search_chunks(query: str, limit: int = 8) -> list[dict]:
     return [item for score, item in ranked[:limit] if score > 0]
 
 
+# 检索本地知识库片段。
+# 功能：基于关键词对 SQLite 中的资料切片做简单排序，返回文件名、页码、片段内容等可展示结果。
 def search_knowledge(query: str, limit: int = 8) -> list[dict]:
     normalized = re.sub(r"\s+", " ", query or "").strip()
     if not normalized:
@@ -181,6 +187,8 @@ def knowledge_stats() -> dict:
     return {"total_chunks": int(row["chunks"] or 0), "total_chars": int(row["chars"] or 0)}
 
 
+# 提取适合生成课程大纲的上下文。
+# 功能：优先选择目录、章节标题、学习路线等高价值片段，降低大模型只看到资料前几页的风险。
 def outline_context(limit: int = 24) -> str:
     keywords = ("目录", "第 1 章", "第1章", "第一章", "Part", "第一部分", "第二部分", "本章包括", "本章小结", "学习路线图", "关于本书")
     with connect() as conn:
@@ -198,11 +206,15 @@ def outline_context(limit: int = 24) -> str:
     return "\n\n".join(selected) or all_context(limit)
 
 
+# 提取某个章节生成内容所需上下文。
+# 功能：用章节标题和学习目标检索相关资料片段，供章节讲义和测验生成使用。
 def chapter_context(title: str, objective: str, limit: int = 14) -> str:
     chunks = search_chunks(f"{title} {objective}", limit)
     return "\n\n".join(item["content"] for item in chunks)
 
 
+# 从原始文档结构中识别章节目录。
+# 功能：优先读取 PDF 书签目录；若书签不足，再从切片文本中扫描“第 N 章”标题。
 def document_outline_chapters() -> list[dict]:
     with connect() as conn:
         rows = conn.execute("SELECT file_path FROM documents ORDER BY id").fetchall()
@@ -218,6 +230,8 @@ def document_outline_chapters() -> list[dict]:
     return _text_outline_chapters()
 
 
+# 读取 PDF 内置书签中的章节标题。
+# 功能：用于教材类 PDF，直接利用原书目录生成准确章节数量，避免大模型固定生成少量章节。
 def _pdf_outline_chapters(path: Path) -> list[dict]:
     try:
         reader = PdfReader(str(path))
@@ -328,6 +342,8 @@ def _next_available_path(target: Path) -> Path:
     raise ValueError("同名资料过多，请重命名文件后再上传。")
 
 
+# 根据文件类型加载资料文本。
+# 功能：txt/md 使用文本加载器，pdf 使用逐页加载器，docx 读取段落后转为 LangChain Document。
 def _load_documents(file_path: Path) -> list[Document]:
     suffix = file_path.suffix.lower()
     if suffix in {".txt", ".md"}:
@@ -354,6 +370,8 @@ def _summarize_chunks(chunks: list[Document]) -> str:
     return clean_preview_text(text) or "资料已入库，部分页面可能因扫描件或字体编码导致预览不可读。"
 
 
+# 清理资料预览文本。
+# 功能：压缩空白、过滤乱码和 PDF 碎片化前缀，让前端资料卡片展示更稳定。
 def clean_preview_text(text: str) -> str:
     cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", " ", text or "")
     cleaned = re.sub(r"\s+", " ", cleaned).strip()

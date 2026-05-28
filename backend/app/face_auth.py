@@ -19,6 +19,8 @@ SUPPORTED_DESCRIPTOR_LENGTHS = {FACE_DESCRIPTOR_LENGTH, COMPOSITE_DESCRIPTOR_LEN
 FACE_SESSIONS: dict[str, str] = {}
 
 
+# 查询账号的人脸模板状态。
+# 功能：告诉前端该账号是否已录入人脸，以及旧模板是否需要升级。
 def profile_info(username: str) -> dict:
     with connect() as conn:
         row = conn.execute("SELECT descriptor, updated_at FROM face_profiles WHERE username=?", (username,)).fetchone()
@@ -34,6 +36,8 @@ def profile_info(username: str) -> dict:
     }
 
 
+# 录入或更新账号人脸模板。
+# 功能：保存 face-api descriptor 和灰度模板组合特征；已登录且持有替换令牌时允许重新录入。
 def enroll_face(username: str, descriptor: list[float], allow_replace: bool = False, replace_token: str = "") -> dict:
     clean = _validate_descriptor(descriptor)
     with connect() as conn:
@@ -56,6 +60,8 @@ def enroll_face(username: str, descriptor: list[float], allow_replace: bool = Fa
     return {"ok": True, "username": username, "message": "授权人脸模板已录入。"}
 
 
+# 核验登录人脸。
+# 功能：将当前采集特征与账号已保存模板比对，结合深度人脸距离和灰度模板差异决定是否通过。
 def verify_face(username: str, descriptor: list[float]) -> dict:
     probe = _validate_descriptor(descriptor)
     with connect() as conn:
@@ -157,6 +163,8 @@ def _hash_distance(left: list[float], right: list[float]) -> float | None:
     return sum(1 for left_bit, right_bit in zip(left_hash, right_hash) if round(left_bit) != round(right_bit)) / HASH_DESCRIPTOR_LENGTH
 
 
+# 人脸核验判定规则。
+# 功能：以 face-api 深度特征距离为主、灰度模板差异为辅，避免单一低质量模板过宽放行。
 def _faceapi_auth_passed(face_distance: float, face_threshold: float, hash_distance: float | None) -> tuple[bool, str]:
     if face_distance > face_threshold:
         return False, "face_distance"
