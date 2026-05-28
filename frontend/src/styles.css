@@ -2330,7 +2330,14 @@ button svg {
 }
 
 .login-card {
-  grid-template-columns: minmax(0, 1fr) 420px;
+  width: min(1040px, calc(100vw - 48px));
+  grid-template-columns: minmax(340px, 0.9fr) minmax(390px, 1fr);
+  grid-template-areas:
+    "copy camera"
+    "copy actions"
+    "tip tip";
+  gap: 18px 22px;
+  align-items: stretch;
   position: relative;
   overflow: hidden;
   border: 1px solid var(--color-border);
@@ -2350,17 +2357,22 @@ button svg {
 }
 
 .login-copy {
+  grid-area: copy;
   min-width: 0;
   align-self: stretch;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: start;
+  padding: 20px;
+  border: 1px solid #e2ebf6;
+  border-radius: var(--radius-md);
+  background: #f8fbff;
 }
 
 .login-copy h1 {
-  margin: 10px 0 8px;
+  margin: 14px 0 8px;
   color: var(--color-text);
-  font-size: clamp(36px, 4vw, 52px);
+  font-size: clamp(30px, 3vw, 40px);
   line-height: 1.05;
 }
 
@@ -2378,10 +2390,12 @@ button svg {
   margin: 0;
   color: var(--color-muted);
   font-size: 15px;
+  line-height: 1.7;
 }
 
 .login-steps {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin: 18px 0 0;
   padding: 0;
@@ -2407,7 +2421,7 @@ button svg {
   gap: 9px;
   align-items: flex-start;
   max-width: 520px;
-  margin-top: 16px;
+  margin-top: auto;
   padding: 12px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -2417,8 +2431,10 @@ button svg {
 }
 
 .camera-panel {
+  grid-area: camera;
   align-self: stretch;
-  border-radius: var(--radius-lg);
+  min-height: 300px;
+  border-radius: var(--radius-md);
   border-color: #d7e4f2;
   background:
     linear-gradient(145deg, rgba(15, 36, 63, 0.96), rgba(23, 59, 114, 0.92)),
@@ -2435,6 +2451,7 @@ button svg {
 }
 
 .login-tip {
+  grid-area: tip;
   padding: 12px 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -2465,13 +2482,59 @@ button svg {
 }
 
 .login-actions {
+  grid-area: actions;
+  grid-column: auto;
   align-items: center;
-  padding-top: 2px;
-  border-top: 1px solid #edf2f8;
+  justify-content: stretch;
+  padding: 12px;
+  border: 1px solid #e2ebf6;
+  border-radius: var(--radius-md);
+  background: #fbfdff;
 }
 
 .login-actions button {
+  flex: 1;
   min-height: 42px;
+}
+
+.login-shell {
+  place-items: start center;
+  align-content: start;
+  gap: 18px;
+  padding: 26px 24px 34px;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(31, 111, 229, 0.08), transparent 32%),
+    linear-gradient(180deg, #f6f9fd 0%, var(--color-bg) 100%);
+  background-size: auto;
+}
+
+.login-topbar {
+  width: min(1040px, calc(100vw - 48px));
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-sm);
+}
+
+.login-topbar strong,
+.login-topbar span {
+  display: block;
+}
+
+.login-topbar strong {
+  color: var(--color-text);
+  font-size: 17px;
+}
+
+.login-topbar span {
+  margin-top: 2px;
+  color: var(--color-muted);
+  font-size: 13px;
 }
 
 .login-tip.error {
@@ -2491,6 +2554,15 @@ button svg {
 
   .chapter-sidebar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .login-card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "copy"
+      "camera"
+      "actions"
+      "tip";
   }
 }
 
@@ -2515,6 +2587,23 @@ button svg {
   .next-action-buttons button,
   .hero-actions button,
   .content-heading button {
+    width: 100%;
+  }
+
+  .login-shell {
+    padding: 12px;
+  }
+
+  .login-topbar,
+  .login-card {
+    width: 100%;
+  }
+
+  .login-actions {
+    flex-direction: column;
+  }
+
+  .login-actions button {
     width: 100%;
   }
 }

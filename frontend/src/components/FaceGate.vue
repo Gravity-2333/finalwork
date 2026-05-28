@@ -272,6 +272,13 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="login-shell">
+    <div class="login-topbar">
+      <div class="brand-mark">AI</div>
+      <div>
+        <strong>AI 学习助手</strong>
+        <span>安全学习工作台</span>
+      </div>
+    </div>
     <section class="login-card">
       <div class="login-copy">
         <div class="eyebrow"><ShieldCheck :size="17" /> 人脸安全登录</div>
@@ -313,7 +320,7 @@ onBeforeUnmount(() => {
           返回工作台
         </button>
       </div>
-      <p :class="['login-tip', tipKind]">{{ message || cameraMessage }}</p>
+      <p :class="['login-tip', tipKind]">{{ cameraMessage || message }}</p>
     </section>
   </main>
 </template>
