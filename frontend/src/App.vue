@@ -1,9 +1,23 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { Activity, BookOpen, CheckCircle2, Compass, FolderOpen, MessageCircle, Mic, Radio, Settings, Trophy } from 'lucide-vue-next'
+import {
+  Activity,
+  BookOpen,
+  CheckCircle2,
+  Compass,
+  FolderOpen,
+  LogOut,
+  MessageCircle,
+  Mic,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Radio,
+  ScanFace,
+  Settings,
+  Trophy
+} from 'lucide-vue-next'
 import DashboardMetrics from './components/DashboardMetrics.vue'
 import FaceGate from './components/FaceGate.vue'
-import HeroHeader from './components/HeroHeader.vue'
 import KnowledgePanel from './components/KnowledgePanel.vue'
 import NextActionCard from './components/NextActionCard.vue'
 import ProviderPanel from './components/ProviderPanel.vue'
@@ -114,6 +128,7 @@ const faceProfileState = reactive({ enrolled: false, username: '杨翰飞', need
 const faceManageOpen = ref(false)
 const settingsOpen = ref(false)
 const faceReplaceToken = ref('')
+const sidebarCollapsed = ref(false)
 const maxUploadBytes = 25 * 1024 * 1024
 const maxUploadFiles = 20
 const promptVersion = 3
@@ -185,6 +200,7 @@ const navItems = [
   { id: 'voice', label: '语音助手', icon: Mic },
   { id: 'settings', label: '模型设置', icon: Settings }
 ]
+const activeNavItem = computed(() => navItems.find((item) => item.id === activeView.value) || navItems[0])
 const progress = computed(() => {
   if (!chapters.value.length) return 0
   return Math.round(chapters.value.reduce((sum, item) => sum + item.progress, 0) / chapters.value.length)
@@ -1014,53 +1030,73 @@ function loadProviderConfig(provider = config.provider) {
     @cancel="faceManageOpen = false"
     @username-change="handleFaceUsernameChange"
   />
-  <main v-else class="app-shell">
-    <HeroHeader
-      :face-ok="face.ok"
-      :loading="status.loading"
-      :listening="listening"
-      :supported="supported"
-      @manage-face="faceManageOpen = true"
-      @voice="start"
-      @logout="logout"
-    />
-
-    <section class="app-status">
-      <div>
-        <strong>{{ status.warning ? '需要处理' : '运行状态' }}</strong>
-        <span :class="{ warning: status.warning }">{{ status.warning || status.message }}</span>
+  <main v-else :class="['app-shell', { 'sidebar-collapsed': sidebarCollapsed }]">
+    <aside class="app-sidebar" aria-label="后台导航">
+      <div class="sidebar-brand">
+        <div class="brand-mark">AI</div>
+        <div class="brand-copy">
+          <strong>AI 学习助手</strong>
+          <span>Learning Workspace</span>
+        </div>
       </div>
-      <div class="status-actions">
-        <button v-if="courseBootstrapping" class="danger-soft" @click="pauseInitialization">暂停初始化</button>
-        <button @click="settingsOpen = true"><Settings :size="16" /> 系统设置</button>
-        <button @click="activeView = 'settings'"><Settings :size="16" /> 模型设置</button>
-      </div>
-    </section>
-
-    <NextActionCard
-      :title="nextAction.title"
-      :description="nextAction.description"
-      :action="nextAction.action"
-      :secondary="nextAction.secondary"
-      :disabled="nextAction.disabled"
-      @primary="handleNextAction"
-      @secondary="handleNextSecondary"
-    />
-
-    <DashboardMetrics
-      :document-count="uniqueDocuments.length"
-      :chapter-count="chapters.length"
-      :progress="progress"
-      :wrong-count="wrongs.length"
-    />
-
-    <nav class="app-nav" aria-label="功能导航">
-      <button v-for="item in navItems" :key="item.id" :class="{ selected: activeView === item.id }" @click="activeView = item.id">
-        <component :is="item.icon" :size="17" /> {{ item.label }}
+      <nav class="app-nav" aria-label="功能导航">
+        <button v-for="item in navItems" :key="item.id" :class="{ selected: activeView === item.id }" @click="activeView = item.id">
+          <component :is="item.icon" :size="18" />
+          <span>{{ item.label }}</span>
+        </button>
+      </nav>
+      <button class="sidebar-toggle" type="button" @click="sidebarCollapsed = !sidebarCollapsed">
+        <PanelLeftOpen v-if="sidebarCollapsed" :size="18" />
+        <PanelLeftClose v-else :size="18" />
+        <span>{{ sidebarCollapsed ? '展开导航' : '收起导航' }}</span>
       </button>
-    </nav>
+    </aside>
 
-    <section class="content-frame">
+    <div class="app-workspace">
+      <header class="topbar">
+        <div class="topbar-title">
+          <div class="eyebrow"><component :is="activeNavItem.icon" :size="16" /> {{ activeNavItem.label }}</div>
+          <h1>{{ activeNavItem.label }}</h1>
+          <p :class="['topbar-status', { warning: status.warning }]">
+            {{ status.warning ? `需处理：${status.warning}` : `状态：${status.message}` }}
+          </p>
+        </div>
+        <div class="topbar-actions">
+          <button v-if="courseBootstrapping" class="danger-soft" @click="pauseInitialization">暂停初始化</button>
+          <button @click="settingsOpen = true"><Settings :size="16" /> 系统</button>
+          <button :class="{ active: listening }" :disabled="!supported" @click="start">
+            <Mic :size="16" /> {{ listening ? '停止' : '语音' }}
+          </button>
+          <button :disabled="status.loading" @click="faceManageOpen = true"><ScanFace :size="16" /> 人脸</button>
+          <button :disabled="status.loading" @click="logout"><LogOut :size="16" /> 退出</button>
+          <div class="user-card" title="当前登录账号">
+            <div class="user-avatar">{{ faceProfileState.username.slice(0, 1) || '用' }}</div>
+            <div>
+              <strong>{{ faceProfileState.username }}</strong>
+              <span>已登录</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <NextActionCard
+        :title="nextAction.title"
+        :description="nextAction.description"
+        :action="nextAction.action"
+        :secondary="nextAction.secondary"
+        :disabled="nextAction.disabled"
+        @primary="handleNextAction"
+        @secondary="handleNextSecondary"
+      />
+
+      <DashboardMetrics
+        :document-count="uniqueDocuments.length"
+        :chapter-count="chapters.length"
+        :progress="progress"
+        :wrong-count="wrongs.length"
+      />
+
+      <section class="content-frame">
       <KnowledgePanel
         v-if="activeView === 'library'"
         :documents="uniqueDocuments"
@@ -1203,7 +1239,8 @@ function loadProviderConfig(provider = config.provider) {
         @test="runProviderTest"
         @load-cloud-models="loadCloudModels"
       />
-    </section>
+      </section>
+    </div>
     <SettingsModal
       v-if="settingsOpen"
       :settings="appSettings"
