@@ -133,7 +133,7 @@ const faceReplaceToken = ref('')
 const sidebarCollapsed = ref(false)
 const maxUploadBytes = 25 * 1024 * 1024
 const maxUploadFiles = 20
-const promptVersion = 3
+const promptVersion = 4
 let faceProfileLookupId = 0
 let initializationController = null
 let activeInitializationId = ''
@@ -153,7 +153,7 @@ const appSettings = reactive({
     maxSizeText: '25MB'
   },
   voice: {
-    provider: 'web_speech'
+    provider: 'xfyun'
   },
   prompts: {
     outline: defaultPrompts.outline,

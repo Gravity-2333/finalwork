@@ -458,7 +458,7 @@ export function useVoiceCommands(handlers, options = {}) {
   }
 
   function voiceProvider() {
-    return options.voiceProvider?.value || options.voiceProvider || 'web_speech'
+    return options.voiceProvider?.value || options.voiceProvider || 'xfyun'
   }
 
   return {
